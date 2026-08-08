@@ -22,6 +22,16 @@ The minimum Java version is 17.
 
 On Windows, use `gradlew.bat build`.
 
+Run the broker integration test against a ready broker:
+
+```shell
+KRABKA_INTEGRATION_BOOTSTRAP=localhost:9092 \
+  ./gradlew :krabka-streams-test-utils:integrationTest
+```
+
+The broker must enable the streams group protocol and finalize `streams.version=1`.
+For Apache Kafka 4.3.1, set `group.streams.num.standby.replicas=1` to run the standby check.
+
 ## Schema registry example
 
 ```java
@@ -53,9 +63,15 @@ Payload schemas must not use these names. `BlobCodec` splits Arrow IPC output at
 The `1.0.0` columnar API does not keep state across fetched batches. Joins, windows, and aggregates
 only operate on records in the current partition batch.
 
+## Test utilities
+
+`ColumnarTestDriver` runs a built columnar topology without a broker. `SchemaRegistryStub` provides
+a stateful local implementation of the registry endpoints used by the serdes. The artifact also
+exports Apache Kafka's `TopologyTestDriver` for ordinary Kafka Streams topologies.
+
 ## Status
 
-Version `1.0.0` is under development. See [PARITY.md](PARITY.md) for the release checklist.
+The `1.0.0` feature set is complete. See [PARITY.md](PARITY.md) for the parity checklist.
 
 ## License
 
