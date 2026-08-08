@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krabka"
-version = "1.0.0-SNAPSHOT"
+version = "1.0.0"
 
 val moduleDescriptions = mapOf(
     "krabka-streams" to "Apache Kafka Streams API and krabka defaults",

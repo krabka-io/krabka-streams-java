@@ -52,6 +52,12 @@ class ColumnarTopologyTest {
             var source = topology.addSource("same", List.of("in"), new BlobCodec(allocator));
             topology.addSink("same", "out", new BlobCodec(allocator), source);
             assertThrows(ColumnarException.class, topology::build);
+
+            var other = new ColumnarTopology(allocator);
+            var foreignSource = other.addSource("foreign", List.of("in"), new BlobCodec(allocator));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> topology.addSink("foreign-sink", "out", new BlobCodec(allocator), foreignSource));
         }
     }
 }
