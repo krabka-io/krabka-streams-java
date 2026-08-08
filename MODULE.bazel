@@ -1,0 +1,49 @@
+module(
+    name = "krabka_streams_java",
+    version = "1.0.0",
+)
+
+bazel_dep(name = "rules_java", version = "9.3.0")
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+
+bazel_dep(name = "aspect_rules_js", version = "3.4.0", dev_dependency = True)
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "krabka_streams_maven",
+    artifacts = [
+        "com.fasterxml.jackson.core:jackson-core:2.22.0",
+        "com.fasterxml.jackson.core:jackson-databind:2.22.0",
+        "com.google.protobuf:protobuf-java:4.33.5",
+        "com.networknt:json-schema-validator:2.0.4",
+        "org.apache.arrow:arrow-memory-core:19.0.0",
+        "org.apache.arrow:arrow-memory-netty:19.0.0",
+        "org.apache.arrow:arrow-vector:19.0.0",
+        "org.apache.avro:avro:1.12.1",
+        "org.apache.kafka:kafka-clients:4.3.1",
+        "org.apache.kafka:kafka-streams:4.3.1",
+        "org.apache.kafka:kafka-streams-test-utils:4.3.1",
+        "org.junit.platform:junit-platform-console-standalone:1.13.4",
+    ],
+    fail_if_repin_required = True,
+    lock_file = "//:maven_install.json",
+    repositories = ["https://repo1.maven.org/maven2"],
+)
+use_repo(maven, "krabka_streams_maven")
+
+npm = use_extension(
+    "@aspect_rules_js//npm:extensions.bzl",
+    "npm",
+    dev_dependency = True,
+)
+npm.npm_translate_lock(
+    name = "npm",
+    data = [
+        "//:package.json",
+        "//:pnpm-workspace.yaml",
+    ],
+    npm_package_lock = "//:package-lock.json",
+    pnpm_lock = "//:pnpm-lock.yaml",
+    update_pnpm_lock = True,
+)
+use_repo(npm, "npm")

@@ -20,6 +20,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
       - uses: gradle/actions/setup-gradle@v6
       - name: Check release credentials
         env:
@@ -32,13 +37,15 @@ jobs:
           test -n "$MAVEN_CENTRAL_PASSWORD"
           test -n "$SIGNING_KEY"
           test -n "$SIGNING_PASSWORD"
-      - name: Build, sign, and upload artifacts
+      - name: Verify release
+        run: bazel test //...
+      - name: Sign and upload artifacts
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-        run: ./gradlew build publishAllPublicationsToCentralPortalRepository
+        run: ./gradlew publishAllPublicationsToCentralPortalRepository
       - name: Publish the Central Portal deployment
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}

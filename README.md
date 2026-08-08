@@ -60,9 +60,29 @@ Settings you provide are never overwritten. See [Configuration](docs/configurati
 
 ```shell
 ./gradlew build
+bazel build //...
+bazel test //...
 ```
 
 On Windows, use `gradlew.bat build`.
+
+To consume the source directly from another Bazel module, add this to its
+`MODULE.bazel` (replace the commit with the revision you want to pin):
+
+```starlark
+bazel_dep(name = "krabka_streams_java", version = "1.0.0")
+git_override(
+    module_name = "krabka_streams_java",
+    remote = "https://github.com/krabka-io/krabka-streams-java.git",
+    commit = "<commit SHA>",
+)
+```
+
+Then depend on any public module target:
+
+```starlark
+deps = ["@krabka_streams_java//krabka-streams:krabka-streams"]
+```
 
 Run the broker integration test against a ready broker:
 

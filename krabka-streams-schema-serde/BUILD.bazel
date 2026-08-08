@@ -1,0 +1,36 @@
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
+
+java_library(
+    name = "krabka-streams-schema-serde",
+    srcs = glob(["src/main/java/**/*.java"]),
+    javacopts = ["--release", "17"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//krabka-streams",
+        "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_core",
+        "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@krabka_streams_maven//:com_google_protobuf_protobuf_java",
+        "@krabka_streams_maven//:com_networknt_json_schema_validator",
+        "@krabka_streams_maven//:org_apache_avro_avro",
+    ],
+    exports = [
+        "//krabka-streams",
+        "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_core",
+        "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_databind",
+        "@krabka_streams_maven//:com_google_protobuf_protobuf_java",
+        "@krabka_streams_maven//:org_apache_avro_avro",
+    ],
+)
+
+java_test(
+    name = "tests",
+    srcs = glob(["src/test/java/**/*.java"]),
+    args = ["execute", "--select-package=io.krabka.streams.schema", "--fail-if-no-tests"],
+    javacopts = ["--release", "17"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    use_testrunner = False,
+    deps = [
+        ":krabka-streams-schema-serde",
+        "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
+    ],
+)

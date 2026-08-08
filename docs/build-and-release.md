@@ -5,6 +5,8 @@
 - JDK 17 or later on the `PATH`. Gradle's toolchain support provisions Java 17 for
   compilation, so a newer JDK can drive the build.
 - No Gradle installation. The wrapper pins Gradle 9.6.1.
+- Bazelisk for Bazel builds. `.bazelversion` pins Bazel 9.2.0 and Bazel downloads its
+  Java 17 toolchain.
 - Node.js and npm on the `PATH` for the Markdown tasks only. The JVM build never
   needs them.
 
@@ -17,6 +19,8 @@
 ./gradlew javadoc                            # javadoc for every module
 ./gradlew clean
 ./gradlew publishToMavenLocal                # install into ~/.m2 for local consumption
+bazel build //...                            # compile every module
+bazel test //...                             # unit, formatting, and lint tests
 ```
 
 On Windows, use `gradlew.bat`.
@@ -151,15 +155,10 @@ Three workflows live in `.github/workflows`.
 
 ### `ci.yml`
 
-Runs on every pull request and on pushes to `main`, with two jobs.
-
-**`build`** runs a matrix over Java 17 and 21, both running `./gradlew build`. This is
-the gate for compilation, unit tests, and Javadoc.
-
-**`markdown`** sets up Node 22 alongside Java and runs
-`./gradlew checkMarkdownFormat lintMarkdown`. Keeping it in its own job is what lets the
-JVM jobs stay free of a Node toolchain, and it is why the Markdown tasks are not wired
-into `check`: `./gradlew build` would otherwise fail on a machine without npm.
+Runs on every pull request and on pushes to `main`. The `build` job runs
+`bazel test //...` with Java 17 and 21, compiling every module and running the Java,
+formatting, and lint tests. Bazel supplies Java, Node, and the npm tools; the workflow
+does not install those toolchains separately.
 
 ### `integration.yml`
 
@@ -167,14 +166,14 @@ Runs on the same triggers, with two jobs.
 
 **`broker-integration`** runs a matrix over `apache-kafka-4.3.1` and `krabka-0.3.8`. Each
 job starts the broker in a container, waits for the startup line in its logs, finalizes
-`streams.version=1` where needed, and runs `integrationTest` with
+`streams.version=1` where needed, and runs the Bazel `integration_tests` target with
 `KRABKA_INTEGRATION_BOOTSTRAP=localhost:9092`. Broker logs are always dumped afterwards.
 `fail-fast: false` keeps one broker's failure from cancelling the other. Timeout: 20
 minutes.
 
 **`schema-registry-integration`** starts a krabka broker and the krabka schema
 registry 0.3.8 on a shared Docker network, waits for `GET /subjects` to succeed, and runs
-`integrationTest` with `KRABKA_INTEGRATION_SCHEMA_REGISTRY=http://localhost:8081`.
+the same Bazel target with `KRABKA_INTEGRATION_SCHEMA_REGISTRY=http://localhost:8081`.
 Timeout: 15 minutes.
 
 These two jobs are the reference for running the services locally. The listener,
@@ -189,11 +188,13 @@ Steps:
 
 1. Assert that `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, and
    `SIGNING_PASSWORD` are all non-empty, before anything is built.
-2. `./gradlew build publishAllPublicationsToCentralPortalRepository`, which builds,
-   signs, and uploads to the Central Portal staging endpoint.
-3. `POST` to the Central Portal `manual/upload/defaultRepository/io.krabka` endpoint with
+2. `bazel test //...` verifies the release sources.
+3. `./gradlew publishAllPublicationsToCentralPortalRepository` creates, signs, and uploads
+   the Maven artifacts. Gradle remains the publisher because it owns the POM, sources,
+   Javadoc, and signing configuration.
+4. `POST` to the Central Portal `manual/upload/defaultRepository/io.krabka` endpoint with
    `publishing_type=automatic` to promote the deployment.
-4. `gh release create <tag> --verify-tag --generate-notes`.
+5. `gh release create <tag> --verify-tag --generate-notes`.
 
 ## Publishing
 

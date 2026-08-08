@@ -1,0 +1,56 @@
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
+
+java_library(
+    name = "krabka-streams-test-utils",
+    srcs = glob(["src/main/java/**/*.java"]),
+    javacopts = ["--release", "17"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//krabka-streams-columnar",
+        "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_databind",
+    ],
+    exports = [
+        "//krabka-streams",
+        "//krabka-streams-columnar",
+        "//krabka-streams-schema-serde",
+        "@krabka_streams_maven//:org_apache_kafka_kafka_streams_test_utils",
+    ],
+)
+
+java_test(
+    name = "tests",
+    srcs = glob(["src/test/java/**/*.java"]),
+    args = ["execute", "--select-package=io.krabka.streams.test", "--fail-if-no-tests"],
+    javacopts = ["--release", "17"],
+    jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    use_testrunner = False,
+    deps = [
+        ":krabka-streams-test-utils",
+        "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
+    ],
+)
+
+java_test(
+    name = "integration_tests",
+    srcs = glob(["src/integrationTest/java/**/*.java"]),
+    args = [
+        "execute",
+        "--select-package=io.krabka.streams.test",
+        "--include-classname=.*IT",
+        "--fail-if-no-tests",
+    ],
+    env_inherit = [
+        "KRABKA_INTEGRATION_BOOTSTRAP",
+        "KRABKA_INTEGRATION_SCHEMA_REGISTRY",
+    ],
+    javacopts = ["--release", "17"],
+    jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    tags = ["manual"],
+    use_testrunner = False,
+    deps = [
+        ":krabka-streams-test-utils",
+        "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
+    ],
+)
