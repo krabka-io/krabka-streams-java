@@ -36,6 +36,23 @@ cache.prewarm().join();
 The cache resolves schema IDs before processing starts. If a consumer sees an unknown writer ID,
 the cache starts one background fetch and throws `SchemaFetchPendingException`. The exception is retriable.
 
+## Arrow columnar processing
+
+Columnar topologies use `VectorSchemaRoot`. Each fetched topic partition batch is one processing unit.
+The built-in operations are filter, select, with-columns, and group-by aggregate.
+
+Arrow 19 needs this JVM option when it uses direct buffers:
+
+```text
+--add-opens=java.base/java.nio=ALL-UNNAMED
+```
+
+The reserved columns are `__key`, `__timestamp`, `__partition`, and `__offset`.
+Payload schemas must not use these names. `BlobCodec` splits Arrow IPC output at a 900 KiB soft limit.
+
+The `1.0.0` columnar API does not keep state across fetched batches. Joins, windows, and aggregates
+only operate on records in the current partition batch.
+
 ## Status
 
 Version `1.0.0` is under development. See [PARITY.md](PARITY.md) for the release checklist.
