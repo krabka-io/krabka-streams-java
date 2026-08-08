@@ -18,12 +18,12 @@ jobs:
       matrix:
         broker: [apache-kafka-4.3.1, krabka-0.3.8]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Start Apache Kafka 4.3.1
         if: matrix.broker == 'apache-kafka-4.3.1'
         run: |
@@ -92,12 +92,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Start krabka broker and schema registry
         run: |
           docker network create krabka-registry-it
