@@ -20,19 +20,19 @@ consumer.poll ──► List<ConsumedRecord> ──► BatchCodec.decode ──�
 ```
 
 Nothing survives between batches. Every operator sees exactly the rows in the current
-batch, so joins, windows, and aggregates are all *within-batch* in `1.0.0`. See
+batch, so joins, windows, and aggregates are all _within-batch_ in `1.0.0`. See
 [Limitations](limitations.md).
 
 ## Reserved metadata columns
 
 Every decoded batch carries four columns that hold Kafka record metadata:
 
-| Column | Arrow type | Contents |
-| --- | --- | --- |
-| `__key` | `Binary`, nullable | record key bytes, `null` for a keyless record |
-| `__timestamp` | `Int(64, signed)` | record timestamp |
-| `__partition` | `Int(32, signed)` | source partition |
-| `__offset` | `Int(64, signed)` | source offset |
+| Column        | Arrow type         | Contents                                      |
+| ------------- | ------------------ | --------------------------------------------- |
+| `__key`       | `Binary`, nullable | record key bytes, `null` for a keyless record |
+| `__timestamp` | `Int(64, signed)`  | record timestamp                              |
+| `__partition` | `Int(32, signed)`  | source partition                              |
+| `__offset`    | `Int(64, signed)`  | source offset                                 |
 
 They are appended after the payload columns, in that order. Payload schemas must not
 use these names; a collision throws
@@ -103,8 +103,8 @@ values into Arrow columns through a `RowBridge`, and attaches metadata. Encoding
 reverses it: the payload columns become typed rows again, each row becomes one record,
 the key comes from `__key`, and the timestamp comes from `__timestamp` (or `0`).
 
-Row count is preserved in both directions, so a batch of *n* records decodes to *n*
-rows and encodes back to *n* records.
+Row count is preserved in both directions, so a batch of _n_ records decodes to _n_
+rows and encodes back to _n_ records.
 
 > `RowCodec` calls the serde with an empty topic name (`""`). Any serde that derives a
 > subject from the topic will therefore look for the subject `-value`, and that includes
@@ -134,14 +134,14 @@ try (var batch = bridge.rowsToBatch(orders, allocator)) {
 
 Column inference works per field, from the first non-null sample across the batch:
 
-| JSON node | Arrow type | Notes |
-| --- | --- | --- |
-| text, or all-null | `Utf8` | all-null columns default to `Utf8` |
-| integral number | `Int(64, signed)` | always 64-bit |
-| floating point | `FloatingPoint(DOUBLE)` | always double |
-| boolean | `Bool` | |
-| binary | `Binary` | tagged with metadata `krabka.binary=true` |
-| object or array | `Utf8` | serialized JSON text, tagged `krabka.json=true` |
+| JSON node         | Arrow type              | Notes                                           |
+| ----------------- | ----------------------- | ----------------------------------------------- |
+| text, or all-null | `Utf8`                  | all-null columns default to `Utf8`              |
+| integral number   | `Int(64, signed)`       | always 64-bit                                   |
+| floating point    | `FloatingPoint(DOUBLE)` | always double                                   |
+| boolean           | `Bool`                  |                                                 |
+| binary            | `Binary`                | tagged with metadata `krabka.binary=true`       |
+| object or array   | `Utf8`                  | serialized JSON text, tagged `krabka.json=true` |
 
 Column order follows first appearance across the rows. Nested structures survive a
 round trip because the field metadata records that the column holds JSON text.
@@ -189,15 +189,15 @@ topology.addSink("audit", "audit-log", codec, large);       // fan-out
 var built = topology.build();
 ```
 
-| Method | Purpose |
-| --- | --- |
-| `addSource(name, topics, codec)` | Decodes records for any of `topics`. At least one topic is required. |
-| `addOperator(name, BuiltinOp, parent)` | Adds a built-in operator. |
+| Method                                                             | Purpose                                                                                   |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `addSource(name, topics, codec)`                                   | Decodes records for any of `topics`. At least one topic is required.                      |
+| `addOperator(name, BuiltinOp, parent)`                             | Adds a built-in operator.                                                                 |
 | `addOperator(name, Supplier<? extends ColumnarProcessor>, parent)` | Adds a custom processor; the supplier is invoked once per node each time `runBatch` runs. |
-| `addSink(name, topic, codec, parent)` | Encodes its parent's batches to `topic`. |
-| `sourceTopics()` | Every topic named by any source, for subscribing a consumer. |
-| `validate()` | Checks the graph; also called by `build()`. |
-| `build()` | Returns a reusable `BuiltColumnarTopology`. |
+| `addSink(name, topic, codec, parent)`                              | Encodes its parent's batches to `topic`.                                                  |
+| `sourceTopics()`                                                   | Every topic named by any source, for subscribing a consumer.                              |
+| `validate()`                                                       | Checks the graph; also called by `build()`.                                               |
+| `build()`                                                          | Returns a reusable `BuiltColumnarTopology`.                                               |
 
 `addSource`, `addOperator`, and `addSink` return a `ColumnarNode`, an opaque handle you
 pass as the parent of later nodes. A node from a different topology throws

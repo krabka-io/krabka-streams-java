@@ -48,13 +48,13 @@ with `+` rewritten to `%20`, so subjects containing `/` or spaces are safe.
 
 ### Operations
 
-| Method | HTTP | Returns |
-| --- | --- | --- |
-| `register(subject, kind, schema, messageType)` | `POST /subjects/{subject}/versions` | new or existing schema ID |
-| `lookup(subject, kind, schema, messageType)` | `POST /subjects/{subject}` | the ID of an already-registered identical schema |
-| `latest(subject)` | `GET /subjects/{subject}/versions/latest` | `RegisteredSchema` |
-| `latestId(subject)` | same as `latest` | the ID only |
-| `schemaById(id)` | `GET /schemas/ids/{id}` | `FetchedSchema` |
+| Method                                         | HTTP                                      | Returns                                          |
+| ---------------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
+| `register(subject, kind, schema, messageType)` | `POST /subjects/{subject}/versions`       | new or existing schema ID                        |
+| `lookup(subject, kind, schema, messageType)`   | `POST /subjects/{subject}`                | the ID of an already-registered identical schema |
+| `latest(subject)`                              | `GET /subjects/{subject}/versions/latest` | `RegisteredSchema`                               |
+| `latestId(subject)`                            | same as `latest`                          | the ID only                                      |
+| `schemaById(id)`                               | `GET /schemas/ids/{id}`                   | `FetchedSchema`                                  |
 
 Records returned by the client:
 
@@ -73,12 +73,12 @@ name and is omitted for the other formats.
 Every failure path produces a `SchemaRegistryException`, wrapped in a
 `CompletionException` when it surfaces from `join()`:
 
-| Situation | `statusCode()` | Message |
-| --- | --- | --- |
-| Non-2xx response | the HTTP status | `schema registry returned HTTP 404: ...` including the response body |
-| Transport failure | `-1` | `schema registry request failed` with the cause attached |
-| Unparseable response | `-1` | `cannot parse schema registry response` |
-| Response missing a required field | `-1` | `schema registry response has no integer id` |
+| Situation                         | `statusCode()`  | Message                                                              |
+| --------------------------------- | --------------- | -------------------------------------------------------------------- |
+| Non-2xx response                  | the HTTP status | `schema registry returned HTTP 404: ...` including the response body |
+| Transport failure                 | `-1`            | `schema registry request failed` with the cause attached             |
+| Unparseable response              | `-1`            | `cannot parse schema registry response`                              |
+| Response missing a required field | `-1`            | `schema registry response has no integer id`                         |
 
 ```java
 try {
@@ -107,11 +107,11 @@ its contents are shared.
 
 ### Register modes
 
-| Mode | Registry call during `prewarm` | Use when |
-| --- | --- | --- |
-| `AUTO_REGISTER` | `POST /subjects/{subject}/versions` | Development, or producers that own the schema |
-| `LOOKUP_ONLY` | `POST /subjects/{subject}` | Production, where an unregistered schema must fail |
-| `USE_LATEST` | `GET /subjects/{subject}/versions/latest` | Consumers that follow whatever the registry currently holds |
+| Mode            | Registry call during `prewarm`            | Use when                                                    |
+| --------------- | ----------------------------------------- | ----------------------------------------------------------- |
+| `AUTO_REGISTER` | `POST /subjects/{subject}/versions`       | Development, or producers that own the schema               |
+| `LOOKUP_ONLY`   | `POST /subjects/{subject}`                | Production, where an unregistered schema must fail          |
+| `USE_LATEST`    | `GET /subjects/{subject}/versions/latest` | Consumers that follow whatever the registry currently holds |
 
 `USE_LATEST` is the only mode that adopts the registry's `messageType` in place of the
 locally derived one; the other two keep the local value.

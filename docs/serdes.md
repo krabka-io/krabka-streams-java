@@ -88,12 +88,12 @@ followed by that many varints.
 
 Decoding rejects malformed input with `SerializationException`:
 
-| Condition | Message |
-| --- | --- |
-| Fewer than 5 bytes | `schema frame is shorter than 5 bytes` |
-| First byte is not `0x00` | `invalid schema frame magic byte 0x01` |
-| Truncated index varint | `truncated Protobuf message-index varint` |
-| Varint longer than 10 bytes | `Protobuf message-index varint is too long` |
+| Condition                      | Message                                     |
+| ------------------------------ | ------------------------------------------- |
+| Fewer than 5 bytes             | `schema frame is shorter than 5 bytes`      |
+| First byte is not `0x00`       | `invalid schema frame magic byte 0x01`      |
+| Truncated index varint         | `truncated Protobuf message-index varint`   |
+| Varint longer than 10 bytes    | `Protobuf message-index varint is too long` |
 | Index count out of `int` range | `invalid Protobuf message-index count: ...` |
 
 Both `Frame` and `ProtobufFrame` are records that copy their `body` on construction
@@ -114,7 +114,7 @@ AvroSerde<GenericRecord> generic = AvroSerde.generic(schema, cache, Role.VALUE);
 The specific factories read the schema from the generated class through
 `SpecificData.get().getSchema(type)`.
 
-The schema registered with the registry is the Avro *canonical parsing form*
+The schema registered with the registry is the Avro _canonical parsing form_
 (`SchemaNormalization.toParsingForm`), which strips documentation, ordering, and
 aliases. Two schemas that differ only in those respects therefore resolve to the same
 registry ID.
@@ -195,7 +195,7 @@ JsonSchemaSerde<Order> custom = JsonSchemaSerde.forValue(Order.class, schemaJson
 ```
 
 The `validate` flag controls **deserialization only**. When it is `true`, the incoming
-body is validated before Jackson binds it, against the *writer's* schema: the one
+body is validated before Jackson binds it, against the _writer's_ schema: the one
 fetched for the frame's schema ID. A failure throws
 
 ```text
@@ -212,13 +212,13 @@ A custom mapper is available for values only; keys use the default mapper.
 
 ## Choosing between them
 
-| | Avro | Protobuf | JSON Schema |
-| --- | --- | --- | --- |
-| Payload size | smallest | small | largest |
-| Schema evolution | full reader/writer resolution | field numbers | validation only |
-| Registry `schemaType` | omitted | `PROTOBUF` | `JSON` |
-| Needs generated code | for `SpecificRecord` | yes | no |
-| Reads writer schema per record | yes | ID checked, schema unused | yes, when validating |
+|                                | Avro                          | Protobuf                  | JSON Schema          |
+| ------------------------------ | ----------------------------- | ------------------------- | -------------------- |
+| Payload size                   | smallest                      | small                     | largest              |
+| Schema evolution               | full reader/writer resolution | field numbers             | validation only      |
+| Registry `schemaType`          | omitted                       | `PROTOBUF`                | `JSON`               |
+| Needs generated code           | for `SpecificRecord`          | yes                       | no                   |
+| Reads writer schema per record | yes                           | ID checked, schema unused | yes, when validating |
 
 Avro is the only one of the three that performs true schema resolution at read time.
 Protobuf relies on wire-level compatibility rules and only verifies the message type.

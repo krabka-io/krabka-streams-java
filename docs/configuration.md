@@ -15,10 +15,10 @@ returned object shares no state with it.
 
 Constants:
 
-| Constant | Value |
-| --- | --- |
-| `KrabkaStreamsConfig.GROUP_PROTOCOL_CONFIG` | `"group.protocol"` |
-| `KrabkaStreamsConfig.STREAMS_GROUP_PROTOCOL` | `"streams"` |
+| Constant                                     | Value              |
+| -------------------------------------------- | ------------------ |
+| `KrabkaStreamsConfig.GROUP_PROTOCOL_CONFIG`  | `"group.protocol"` |
+| `KrabkaStreamsConfig.STREAMS_GROUP_PROTOCOL` | `"streams"`        |
 
 Passing `null` throws `NullPointerException` with the message `settings`.
 
@@ -140,14 +140,14 @@ Arrow allocations do not count against the Java heap.
 
 These affect the build and tests only, never the library at runtime.
 
-| Variable | Used by | Effect |
-| --- | --- | --- |
-| `KRABKA_INTEGRATION_BOOTSTRAP` | `BrokerCompatibilityIT` | Broker address; the test is skipped when unset |
-| `KRABKA_INTEGRATION_SCHEMA_REGISTRY` | `SchemaRegistryCompatibilityIT` | Registry base URI; the test is skipped when unset |
-| `MAVEN_CENTRAL_USERNAME` | `publish*` tasks | Central Portal user token |
-| `MAVEN_CENTRAL_PASSWORD` | `publish*` tasks | Central Portal password token |
-| `SIGNING_KEY` | `signing` plugin | In-memory ASCII-armored PGP key; signing is skipped when blank |
-| `SIGNING_PASSWORD` | `signing` plugin | Passphrase for that key |
+| Variable                             | Used by                         | Effect                                                         |
+| ------------------------------------ | ------------------------------- | -------------------------------------------------------------- |
+| `KRABKA_INTEGRATION_BOOTSTRAP`       | `BrokerCompatibilityIT`         | Broker address; the test is skipped when unset                 |
+| `KRABKA_INTEGRATION_SCHEMA_REGISTRY` | `SchemaRegistryCompatibilityIT` | Registry base URI; the test is skipped when unset              |
+| `MAVEN_CENTRAL_USERNAME`             | `publish*` tasks                | Central Portal user token                                      |
+| `MAVEN_CENTRAL_PASSWORD`             | `publish*` tasks                | Central Portal password token                                  |
+| `SIGNING_KEY`                        | `signing` plugin                | In-memory ASCII-armored PGP key; signing is skipped when blank |
+| `SIGNING_PASSWORD`                   | `signing` plugin                | Passphrase for that key                                        |
 
 Both integration tests are annotated with `@EnabledIfEnvironmentVariable`, so running
 `integrationTest` without the variables set reports zero failures and zero executed

@@ -2,12 +2,12 @@
 
 ## Requirements
 
-| Requirement | Version |
-| --- | --- |
-| Java | 17 or later |
-| Apache Kafka Streams | 4.3.1 (a transitive `api` dependency) |
-| Broker | Apache Kafka 4.3.1 or krabka 0.3.8, with `streams.version=1` finalized |
-| Gradle (to build this repository) | 9.6.1, supplied by the wrapper |
+| Requirement                       | Version                                                                |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| Java                              | 17 or later                                                            |
+| Apache Kafka Streams              | 4.3.1 (a transitive `api` dependency)                                  |
+| Broker                            | Apache Kafka 4.3.1 or krabka 0.3.8, with `streams.version=1` finalized |
+| Gradle (to build this repository) | 9.6.1, supplied by the wrapper                                         |
 
 The library targets Java 17 bytecode. Continuous integration compiles and tests on
 Java 17 and Java 21.

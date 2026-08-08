@@ -11,12 +11,12 @@ implementation("io.krabka:krabka-streams:1.0.0")
 
 ## Modules
 
-| Artifact | Purpose |
-| --- | --- |
-| `io.krabka:krabka-streams` | Apache Kafka Streams API and krabka defaults |
-| `io.krabka:krabka-streams-schema-serde` | Avro, Protobuf, and JSON Schema serdes |
-| `io.krabka:krabka-streams-columnar` | Apache Arrow batch processing |
-| `io.krabka:krabka-streams-test-utils` | Test helpers for all modules |
+| Artifact                                | Purpose                                      |
+| --------------------------------------- | -------------------------------------------- |
+| `io.krabka:krabka-streams`              | Apache Kafka Streams API and krabka defaults |
+| `io.krabka:krabka-streams-schema-serde` | Avro, Protobuf, and JSON Schema serdes       |
+| `io.krabka:krabka-streams-columnar`     | Apache Arrow batch processing                |
+| `io.krabka:krabka-streams-test-utils`   | Test helpers for all modules                 |
 
 Each module depends on `krabka-streams`, so any one of them puts the Kafka Streams API
 on your classpath at the version this release pins.
@@ -25,20 +25,20 @@ on your classpath at the version this release pins.
 
 Full documentation is in [docs/](docs/index.md).
 
-| Document | Contents |
-| --- | --- |
-| [Getting started](docs/getting-started.md) | Requirements, coordinates, and first examples |
-| [Configuration](docs/configuration.md) | `KrabkaStreamsConfig`, broker requirements, JVM flags |
-| [Schema registry](docs/schema-registry.md) | Registry client, schema cache, prewarming |
-| [Serdes](docs/serdes.md) | Avro, Protobuf, JSON Schema, and the Confluent wire format |
-| [Columnar processing](docs/columnar.md) | Arrow batches, codecs, topologies, runner |
-| [Columnar operators](docs/columnar-operators.md) | Built-in operators and buffer ownership |
-| [Testing](docs/testing.md) | Test drivers, registry stub, integration suite |
-| [API reference](docs/api-reference.md) | Every public type |
-| [Architecture](docs/architecture.md) | Module layout and design decisions |
-| [Limitations](docs/limitations.md) | What `1.0.0` does not do |
-| [Troubleshooting](docs/troubleshooting.md) | Error messages mapped to causes |
-| [Build and release](docs/build-and-release.md) | Gradle tasks, CI, publishing |
+| Document                                         | Contents                                                   |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)       | Requirements, coordinates, and first examples              |
+| [Configuration](docs/configuration.md)           | `KrabkaStreamsConfig`, broker requirements, JVM flags      |
+| [Schema registry](docs/schema-registry.md)       | Registry client, schema cache, prewarming                  |
+| [Serdes](docs/serdes.md)                         | Avro, Protobuf, JSON Schema, and the Confluent wire format |
+| [Columnar processing](docs/columnar.md)          | Arrow batches, codecs, topologies, runner                  |
+| [Columnar operators](docs/columnar-operators.md) | Built-in operators and buffer ownership                    |
+| [Testing](docs/testing.md)                       | Test drivers, registry stub, integration suite             |
+| [API reference](docs/api-reference.md)           | Every public type                                          |
+| [Architecture](docs/architecture.md)             | Module layout and design decisions                         |
+| [Limitations](docs/limitations.md)               | What `1.0.0` does not do                                   |
+| [Troubleshooting](docs/troubleshooting.md)       | Error messages mapped to causes                            |
+| [Build and release](docs/build-and-release.md)   | Gradle tasks, CI, publishing                               |
 
 ## Kafka Streams
 

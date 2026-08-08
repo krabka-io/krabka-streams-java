@@ -67,15 +67,15 @@ existing columns. Reserved names are rejected at construction time, not at run t
 
 Returned values are coerced to the declared Arrow type:
 
-| Declared vector | Accepted value |
-| --- | --- |
-| `VarChar` (`Utf8`) | anything; `toString()` is applied and encoded as UTF-8 |
-| `VarBinary` (`Binary`) | `byte[]` or `ByteBuffer` |
-| `BigInt`, `Int`, `SmallInt`, `TinyInt` | any `Number`, narrowed |
-| `UInt1`, `UInt2`, `UInt4`, `UInt8` | any `Number` |
-| `Float4`, `Float8` | any `Number` |
-| `Bit` (`Bool`) | `Boolean` |
-| anything else | throws `cannot write Arrow type ...` |
+| Declared vector                        | Accepted value                                         |
+| -------------------------------------- | ------------------------------------------------------ |
+| `VarChar` (`Utf8`)                     | anything; `toString()` is applied and encoded as UTF-8 |
+| `VarBinary` (`Binary`)                 | `byte[]` or `ByteBuffer`                               |
+| `BigInt`, `Int`, `SmallInt`, `TinyInt` | any `Number`, narrowed                                 |
+| `UInt1`, `UInt2`, `UInt4`, `UInt8`     | any `Number`                                           |
+| `Float4`, `Float8`                     | any `Number`                                           |
+| `Bit` (`Bool`)                         | `Boolean`                                              |
+| anything else                          | throws `cannot write Arrow type ...`                   |
 
 `null` writes a null into the column. Because `Utf8` accepts anything, it is the safe
 declaration for a value whose type you cannot pin down.
@@ -98,12 +98,12 @@ Groups rows by the values of the key columns and applies the aggregations **with
 current batch**. The output has one row per distinct key, ordered by first appearance,
 with the key columns first and the aggregate columns after them.
 
-| Function | Output type | Semantics |
-| --- | --- | --- |
-| `COUNT` | `Int(64)` | rows in the group, nulls included |
-| `SUM` | `FloatingPoint(DOUBLE)` for a floating-point input, otherwise `Int(64)` | non-numeric values are ignored; an all-null group yields null |
-| `MIN` | the input column's type | nulls skipped; values compared with `Comparable` |
-| `MAX` | the input column's type | nulls skipped; values compared with `Comparable` |
+| Function | Output type                                                             | Semantics                                                     |
+| -------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `COUNT`  | `Int(64)`                                                               | rows in the group, nulls included                             |
+| `SUM`    | `FloatingPoint(DOUBLE)` for a floating-point input, otherwise `Int(64)` | non-numeric values are ignored; an all-null group yields null |
+| `MIN`    | the input column's type                                                 | nulls skipped; values compared with `Comparable`              |
+| `MAX`    | the input column's type                                                 | nulls skipped; values compared with `Comparable`              |
 
 An unknown key or input column throws
 `ColumnarException("Arrow column does not exist: ...")`, and an empty key list throws

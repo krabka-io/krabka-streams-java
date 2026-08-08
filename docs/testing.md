@@ -80,13 +80,13 @@ try (var allocator = new RootAllocator()) {
 }
 ```
 
-| Method | Behavior |
-| --- | --- |
+| Method                                               | Behavior                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `pipeInput(topic, partition, key, value, timestamp)` | Runs one record as a single-record batch. Offsets start at `0` per topic-partition and increment. |
-| `pipeBatch(topic, records)` | Runs a whole `List<ConsumedRecord>` as one batch. Offsets are whatever the records carry. |
-| `outputSize(topic)` / `isOutputEmpty(topic)` | Queue depth for a sink topic. |
-| `readOutput(topic)` | Removes and returns the oldest record; throws `NoSuchElementException` when empty. |
-| `drainOutput(topic)` | Removes and returns everything queued for the topic. |
+| `pipeBatch(topic, records)`                          | Runs a whole `List<ConsumedRecord>` as one batch. Offsets are whatever the records carry.         |
+| `outputSize(topic)` / `isOutputEmpty(topic)`         | Queue depth for a sink topic.                                                                     |
+| `readOutput(topic)`                                  | Removes and returns the oldest record; throws `NoSuchElementException` when empty.                |
+| `drainOutput(topic)`                                 | Removes and returns everything queued for the topic.                                              |
 
 `pipeInput` and `pipeBatch` differ in an important way for `BlobCodec` topologies: each
 `pipeInput` call is its own batch, so per-batch operators such as `groupBy` see one
@@ -117,13 +117,13 @@ try (var stub = new SchemaRegistryStub()) {
 
 Implemented endpoints:
 
-| Request | Behavior |
-| --- | --- |
-| `POST /subjects/{subject}/versions` | Registers the schema, assigning IDs from `1`. Identical schemas reuse an ID; the subject's version list grows. Returns `{"id": n}`. |
-| `POST /subjects/{subject}` | Looks the schema up. `404` with `error_code` `40403` when it is not registered under that subject. |
-| `GET /subjects/{subject}/versions/latest` | Returns the newest registration, with `subject` and `version`. `404`/`40401` for an unknown subject. |
-| `GET /schemas/ids/{id}` | Returns the schema for an ID, with `schemaType` and `messageType` when present. `404`/`40403` when unknown. |
-| anything else | `404` with `error_code` `40401`. |
+| Request                                   | Behavior                                                                                                                            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /subjects/{subject}/versions`       | Registers the schema, assigning IDs from `1`. Identical schemas reuse an ID; the subject's version list grows. Returns `{"id": n}`. |
+| `POST /subjects/{subject}`                | Looks the schema up. `404` with `error_code` `40403` when it is not registered under that subject.                                  |
+| `GET /subjects/{subject}/versions/latest` | Returns the newest registration, with `subject` and `version`. `404`/`40401` for an unknown subject.                                |
+| `GET /schemas/ids/{id}`                   | Returns the schema for an ID, with `schemaType` and `messageType` when present. `404`/`40403` when unknown.                         |
+| anything else                             | `404` with `error_code` `40401`.                                                                                                    |
 
 Schema identity is the triple `(schema, schemaType, messageType)`, so an Avro schema and
 a JSON schema with the same text receive different IDs. Malformed request bodies produce

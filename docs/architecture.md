@@ -123,13 +123,13 @@ half-built one in the type system.
 
 ### Errors are typed and specific
 
-| Exception | Raised by | Meaning |
-| --- | --- | --- |
-| `SchemaRegistryException` | registry client | transport, status, or response problem; `statusCode()` tells which |
-| `SchemaFetchPendingException` | `SchemaCache` | a writer schema is being fetched; retry |
-| `SerializationException` | serdes, `ArrowIpcSerde` | Kafka's own type, so existing handlers apply |
-| `ColumnarException` | codecs, topology, operators | Arrow-side failure |
-| `IllegalArgumentException` | builders | programming error caught at wiring time |
+| Exception                     | Raised by                   | Meaning                                                            |
+| ----------------------------- | --------------------------- | ------------------------------------------------------------------ |
+| `SchemaRegistryException`     | registry client             | transport, status, or response problem; `statusCode()` tells which |
+| `SchemaFetchPendingException` | `SchemaCache`               | a writer schema is being fetched; retry                            |
+| `SerializationException`      | serdes, `ArrowIpcSerde`     | Kafka's own type, so existing handlers apply                       |
+| `ColumnarException`           | codecs, topology, operators | Arrow-side failure                                                 |
+| `IllegalArgumentException`    | builders                    | programming error caught at wiring time                            |
 
 Messages name the offending element, whether that is the subject, the column, the node,
 or the record index, so a failure identifies itself without a debugger.
@@ -162,16 +162,16 @@ consumer.poll ──► ConsumedRecord[] ──► source (BatchCodec.decode)
 
 ## Concurrency
 
-| Type | Safety |
-| --- | --- |
-| `KrabkaSchemaRegistryClient` | thread-safe; stateless over an `HttpClient` |
-| `SchemaCache` | thread-safe; all state in `ConcurrentHashMap` |
-| Serdes | thread-safe once the cache is prewarmed; the JSON validator cache is concurrent |
-| `ColumnarTopology` | not thread-safe while building |
-| `BuiltColumnarTopology` | not thread-safe; use one per thread |
-| `ColumnarTestDriver` | not thread-safe |
-| `SchemaRegistryStub` | request handling is synchronized |
-| Arrow allocators and roots | not thread-safe; confine to one thread |
+| Type                         | Safety                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `KrabkaSchemaRegistryClient` | thread-safe; stateless over an `HttpClient`                                     |
+| `SchemaCache`                | thread-safe; all state in `ConcurrentHashMap`                                   |
+| Serdes                       | thread-safe once the cache is prewarmed; the JSON validator cache is concurrent |
+| `ColumnarTopology`           | not thread-safe while building                                                  |
+| `BuiltColumnarTopology`      | not thread-safe; use one per thread                                             |
+| `ColumnarTestDriver`         | not thread-safe                                                                 |
+| `SchemaRegistryStub`         | request handling is synchronized                                                |
+| Arrow allocators and roots   | not thread-safe; confine to one thread                                          |
 
 The intended shape for a multi-threaded columnar application is one allocator, one
 built topology, and one consumer/producer pair per thread, with threads partitioned by
@@ -179,15 +179,15 @@ topic-partition.
 
 ## Version pinning
 
-| Dependency | Version | Scope |
-| --- | --- | --- |
-| Apache Kafka Streams | 4.3.1 | `api` |
-| Apache Avro | 1.12.1 | `api` |
-| Protobuf Java | 4.33.5 | `api` |
-| Jackson Databind | 2.22.0 | `api` (serde), `implementation` (columnar) |
-| Apache Arrow | 19.0.0 | `api` (vector), `runtimeOnly` (memory-netty) |
-| networknt json-schema-validator | 2.0.4 | `implementation` |
-| JUnit | 5.13.4 | test |
+| Dependency                      | Version | Scope                                        |
+| ------------------------------- | ------- | -------------------------------------------- |
+| Apache Kafka Streams            | 4.3.1   | `api`                                        |
+| Apache Avro                     | 1.12.1  | `api`                                        |
+| Protobuf Java                   | 4.33.5  | `api`                                        |
+| Jackson Databind                | 2.22.0  | `api` (serde), `implementation` (columnar)   |
+| Apache Arrow                    | 19.0.0  | `api` (vector), `runtimeOnly` (memory-netty) |
+| networknt json-schema-validator | 2.0.4   | `implementation`                             |
+| JUnit                           | 5.13.4  | test                                         |
 
 Kafka 4.3.1 is the floor for the streams group protocol. Arrow 19 is the version whose
 direct-buffer access requires the `--add-opens` flag.

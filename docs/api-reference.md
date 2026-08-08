@@ -16,11 +16,11 @@ Package `io.krabka.streams`.
 
 `public final class`. A utility class that cannot be instantiated.
 
-| Member | Signature |
-| --- | --- |
-| `GROUP_PROTOCOL_CONFIG` | `public static final String` = `"group.protocol"` |
-| `STREAMS_GROUP_PROTOCOL` | `public static final String` = `"streams"` |
-| `withDefaults` | `public static Properties withDefaults(Map<?, ?> settings)` |
+| Member                   | Signature                                                   |
+| ------------------------ | ----------------------------------------------------------- |
+| `GROUP_PROTOCOL_CONFIG`  | `public static final String` = `"group.protocol"`           |
+| `STREAMS_GROUP_PROTOCOL` | `public static final String` = `"streams"`                  |
+| `withDefaults`           | `public static Properties withDefaults(Map<?, ?> settings)` |
 
 `withDefaults` copies `settings` into a new `Properties` and applies krabka defaults
 with `putIfAbsent`. Throws `NullPointerException` for a null argument.
@@ -38,15 +38,15 @@ Package `io.krabka.streams.schema`.
 
 `public final class`. An asynchronous Confluent Schema Registry REST client.
 
-| Member | Signature |
-| --- | --- |
-| constructor | `KrabkaSchemaRegistryClient(URI baseUri)` |
-| constructor | `KrabkaSchemaRegistryClient(URI baseUri, HttpClient httpClient, ObjectMapper objectMapper)` |
-| `register` | `CompletableFuture<Integer> register(String subject, SchemaKind kind, String schema, String messageType)` |
-| `lookup` | `CompletableFuture<Integer> lookup(String subject, SchemaKind kind, String schema, String messageType)` |
-| `latest` | `CompletableFuture<RegisteredSchema> latest(String subject)` |
-| `latestId` | `CompletableFuture<Integer> latestId(String subject)` |
-| `schemaById` | `CompletableFuture<FetchedSchema> schemaById(int schemaId)` |
+| Member       | Signature                                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| constructor  | `KrabkaSchemaRegistryClient(URI baseUri)`                                                                 |
+| constructor  | `KrabkaSchemaRegistryClient(URI baseUri, HttpClient httpClient, ObjectMapper objectMapper)`               |
+| `register`   | `CompletableFuture<Integer> register(String subject, SchemaKind kind, String schema, String messageType)` |
+| `lookup`     | `CompletableFuture<Integer> lookup(String subject, SchemaKind kind, String schema, String messageType)`   |
+| `latest`     | `CompletableFuture<RegisteredSchema> latest(String subject)`                                              |
+| `latestId`   | `CompletableFuture<Integer> latestId(String subject)`                                                     |
+| `schemaById` | `CompletableFuture<FetchedSchema> schemaById(int schemaId)`                                               |
 
 Nested records:
 
@@ -61,31 +61,31 @@ Failures complete the future exceptionally with `SchemaRegistryException`.
 
 `public final class`. A thread-safe store of resolved schema IDs and writer schemas.
 
-| Member | Signature |
-| --- | --- |
-| constructor | `SchemaCache(KrabkaSchemaRegistryClient client)`, which uses `AUTO_REGISTER` and `TopicNameStrategy` |
-| constructor | `SchemaCache(KrabkaSchemaRegistryClient client, RegisterMode registerMode, SubjectNameStrategy subjectNameStrategy)` |
-| `subject` | `String subject(String topic, Role role)` |
-| `intern` | `void intern(String subject, SchemaKind kind, String schema, String messageType)`, idempotent by subject |
-| `prewarm` | `CompletableFuture<Void> prewarm()` |
-| `idForSubject` | `OptionalInt idForSubject(String subject)` |
-| `writerSchema` | `String writerSchema(int schemaId)`, which throws `SchemaFetchPendingException` on a miss |
-| `writerMessageType` | `String writerMessageType(int schemaId)`, `null` when unknown |
-| `seedSubjectId` | `void seedSubjectId(String subject, int schemaId)` |
-| `seedWriterSchema` | `void seedWriterSchema(int schemaId, String schema)` |
-| `seedWriterMessageType` | `void seedWriterMessageType(int schemaId, String messageType)` |
+| Member                  | Signature                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| constructor             | `SchemaCache(KrabkaSchemaRegistryClient client)`, which uses `AUTO_REGISTER` and `TopicNameStrategy`                 |
+| constructor             | `SchemaCache(KrabkaSchemaRegistryClient client, RegisterMode registerMode, SubjectNameStrategy subjectNameStrategy)` |
+| `subject`               | `String subject(String topic, Role role)`                                                                            |
+| `intern`                | `void intern(String subject, SchemaKind kind, String schema, String messageType)`, idempotent by subject             |
+| `prewarm`               | `CompletableFuture<Void> prewarm()`                                                                                  |
+| `idForSubject`          | `OptionalInt idForSubject(String subject)`                                                                           |
+| `writerSchema`          | `String writerSchema(int schemaId)`, which throws `SchemaFetchPendingException` on a miss                            |
+| `writerMessageType`     | `String writerMessageType(int schemaId)`, `null` when unknown                                                        |
+| `seedSubjectId`         | `void seedSubjectId(String subject, int schemaId)`                                                                   |
+| `seedWriterSchema`      | `void seedWriterSchema(int schemaId, String schema)`                                                                 |
+| `seedWriterMessageType` | `void seedWriterMessageType(int schemaId, String messageType)`                                                       |
 
 ### AvroSerde&lt;T&gt;
 
 `public final class ... implements Serde<T>`
 
-| Member | Signature |
-| --- | --- |
-| `forValue` | `static <T extends SpecificRecord> AvroSerde<T> forValue(Class<T> type, SchemaCache cache)` |
-| `forKey` | `static <T extends SpecificRecord> AvroSerde<T> forKey(Class<T> type, SchemaCache cache)` |
-| `generic` | `static AvroSerde<GenericRecord> generic(Schema schema, SchemaCache cache, Role role)` |
-| `registerSubject` | `void registerSubject(String topic)` |
-| `serializer` / `deserializer` | from `Serde<T>` |
+| Member                        | Signature                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `forValue`                    | `static <T extends SpecificRecord> AvroSerde<T> forValue(Class<T> type, SchemaCache cache)` |
+| `forKey`                      | `static <T extends SpecificRecord> AvroSerde<T> forKey(Class<T> type, SchemaCache cache)`   |
+| `generic`                     | `static AvroSerde<GenericRecord> generic(Schema schema, SchemaCache cache, Role role)`      |
+| `registerSubject`             | `void registerSubject(String topic)`                                                        |
+| `serializer` / `deserializer` | from `Serde<T>`                                                                             |
 
 Registers the Avro canonical parsing form. Deserialization performs writer/reader schema
 resolution.
@@ -94,11 +94,11 @@ resolution.
 
 `public final class ... implements Serde<T>`
 
-| Member | Signature |
-| --- | --- |
-| `forValue` | `static <T extends Message> ProtobufSerde<T> forValue(T defaultInstance, SchemaCache cache)` |
-| `forKey` | `static <T extends Message> ProtobufSerde<T> forKey(T defaultInstance, SchemaCache cache)` |
-| `registerSubject` | `void registerSubject(String topic)` |
+| Member            | Signature                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| `forValue`        | `static <T extends Message> ProtobufSerde<T> forValue(T defaultInstance, SchemaCache cache)` |
+| `forKey`          | `static <T extends Message> ProtobufSerde<T> forKey(T defaultInstance, SchemaCache cache)`   |
+| `registerSubject` | `void registerSubject(String topic)`                                                         |
 
 Uses the Protobuf message-index framing and verifies the writer's `messageType`.
 
@@ -106,12 +106,12 @@ Uses the Protobuf message-index framing and verifies the writer's `messageType`.
 
 `public final class ... implements Serde<T>`
 
-| Member | Signature |
-| --- | --- |
-| `forValue` | `static <T> JsonSchemaSerde<T> forValue(Class<T> type, String schema, SchemaCache cache, boolean validate)` |
-| `forKey` | `static <T> JsonSchemaSerde<T> forKey(Class<T> type, String schema, SchemaCache cache, boolean validate)` |
-| `forValue` | `static <T> JsonSchemaSerde<T> forValue(Class<T> type, String schema, SchemaCache cache, boolean validate, ObjectMapper objectMapper)` |
-| `registerSubject` | `void registerSubject(String topic)` |
+| Member            | Signature                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `forValue`        | `static <T> JsonSchemaSerde<T> forValue(Class<T> type, String schema, SchemaCache cache, boolean validate)`                            |
+| `forKey`          | `static <T> JsonSchemaSerde<T> forKey(Class<T> type, String schema, SchemaCache cache, boolean validate)`                              |
+| `forValue`        | `static <T> JsonSchemaSerde<T> forValue(Class<T> type, String schema, SchemaCache cache, boolean validate, ObjectMapper objectMapper)` |
+| `registerSubject` | `void registerSubject(String topic)`                                                                                                   |
 
 `validate` applies to deserialization only, against the writer's schema, using the
 Draft 2020-12 dialect.
@@ -120,13 +120,13 @@ Draft 2020-12 dialect.
 
 `public final class`. Framing helpers.
 
-| Member | Signature |
-| --- | --- |
-| `MAGIC` | `public static final byte` = `0` |
-| `encode` | `static byte[] encode(int schemaId, byte[] body)` |
-| `decode` | `static Frame decode(byte[] bytes)` |
+| Member           | Signature                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `MAGIC`          | `public static final byte` = `0`                                                        |
+| `encode`         | `static byte[] encode(int schemaId, byte[] body)`                                       |
+| `decode`         | `static Frame decode(byte[] bytes)`                                                     |
 | `encodeProtobuf` | `static byte[] encodeProtobuf(int schemaId, List<Integer> messageIndexes, byte[] body)` |
-| `decodeProtobuf` | `static ProtobufFrame decodeProtobuf(byte[] bytes)` |
+| `decodeProtobuf` | `static ProtobufFrame decodeProtobuf(byte[] bytes)`                                     |
 
 ```java
 public record Frame(int schemaId, byte[] body) {}
@@ -137,20 +137,20 @@ Both records copy `body` on construction and on access.
 
 ### Enums and interfaces
 
-| Type | Values / members |
-| --- | --- |
-| `Role` | `KEY`, `VALUE` |
-| `SchemaKind` | `AVRO` (no wire name), `PROTOBUF`, `JSON` |
-| `RegisterMode` | `AUTO_REGISTER`, `LOOKUP_ONLY`, `USE_LATEST` |
-| `SubjectNameStrategy` | `@FunctionalInterface String subject(String topic, Role role)` |
-| `TopicNameStrategy` | `implements SubjectNameStrategy`, producing `topic + "-key"` or `topic + "-value"` |
+| Type                  | Values / members                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `Role`                | `KEY`, `VALUE`                                                                     |
+| `SchemaKind`          | `AVRO` (no wire name), `PROTOBUF`, `JSON`                                          |
+| `RegisterMode`        | `AUTO_REGISTER`, `LOOKUP_ONLY`, `USE_LATEST`                                       |
+| `SubjectNameStrategy` | `@FunctionalInterface String subject(String topic, Role role)`                     |
+| `TopicNameStrategy`   | `implements SubjectNameStrategy`, producing `topic + "-key"` or `topic + "-value"` |
 
 ### Exceptions
 
-| Type | Extends | Members |
-| --- | --- | --- |
-| `SchemaRegistryException` | `RuntimeException` | `SchemaRegistryException(String)`, `(String, Throwable)`, `(int statusCode, String body)`; `int statusCode()`, which returns `-1` for transport or parsing errors |
-| `SchemaFetchPendingException` | `org.apache.kafka.common.errors.RetriableException` | `SchemaFetchPendingException(int schemaId)`; `int schemaId()` |
+| Type                          | Extends                                             | Members                                                                                                                                                           |
+| ----------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SchemaRegistryException`     | `RuntimeException`                                  | `SchemaRegistryException(String)`, `(String, Throwable)`, `(int statusCode, String body)`; `int statusCode()`, which returns `-1` for transport or parsing errors |
+| `SchemaFetchPendingException` | `org.apache.kafka.common.errors.RetriableException` | `SchemaFetchPendingException(int schemaId)`; `int schemaId()`                                                                                                     |
 
 ---
 
@@ -162,23 +162,23 @@ Package `io.krabka.streams.columnar`.
 
 `public final class`. The topology builder.
 
-| Member | Signature |
-| --- | --- |
-| constructor | `ColumnarTopology(BufferAllocator allocator)` |
-| `addSource` | `ColumnarNode addSource(String name, Collection<String> topics, BatchCodec codec)` |
-| `addOperator` | `ColumnarNode addOperator(String name, BuiltinOp operator, ColumnarNode parent)` |
-| `addOperator` | `ColumnarNode addOperator(String name, Supplier<? extends ColumnarProcessor> processor, ColumnarNode parent)` |
-| `addSink` | `ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent)` |
-| `sourceTopics` | `List<String> sourceTopics()` |
-| `validate` | `void validate()`, which throws `ColumnarException` |
-| `build` | `BuiltColumnarTopology build()` |
+| Member         | Signature                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------- |
+| constructor    | `ColumnarTopology(BufferAllocator allocator)`                                                                 |
+| `addSource`    | `ColumnarNode addSource(String name, Collection<String> topics, BatchCodec codec)`                            |
+| `addOperator`  | `ColumnarNode addOperator(String name, BuiltinOp operator, ColumnarNode parent)`                              |
+| `addOperator`  | `ColumnarNode addOperator(String name, Supplier<? extends ColumnarProcessor> processor, ColumnarNode parent)` |
+| `addSink`      | `ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent)`                      |
+| `sourceTopics` | `List<String> sourceTopics()`                                                                                 |
+| `validate`     | `void validate()`, which throws `ColumnarException`                                                           |
+| `build`        | `BuiltColumnarTopology build()`                                                                               |
 
 ### BuiltColumnarTopology
 
 `public final class`. Validated and reusable, but not thread-safe.
 
-| Member | Signature |
-| --- | --- |
+| Member     | Signature                                                                    |
+| ---------- | ---------------------------------------------------------------------------- |
 | `runBatch` | `List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records)` |
 
 ### ColumnarNode
@@ -204,12 +204,12 @@ Returns the next offset to read. Does not commit offsets.
 
 ### Codecs
 
-| Type | Signature |
-| --- | --- |
-| `BatchCodec` | `interface`: `VectorSchemaRoot decode(List<ConsumedRecord>)`, `List<ProduceRecord> encode(VectorSchemaRoot)` |
-| `BlobCodec` | `final class implements BatchCodec`: `BlobCodec(BufferAllocator)`, `BlobCodec(BufferAllocator, int maxRecordBytes)` |
-| `RowCodec<T>` | `final class implements BatchCodec`: `RowCodec(Serde<T> valueSerde, RowBridge<T> rowBridge, BufferAllocator allocator)` |
-| `ArrowIpcSerde` | `final class implements Serde<VectorSchemaRoot>`: `ArrowIpcSerde(BufferAllocator)` |
+| Type            | Signature                                                                                                               |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `BatchCodec`    | `interface`: `VectorSchemaRoot decode(List<ConsumedRecord>)`, `List<ProduceRecord> encode(VectorSchemaRoot)`            |
+| `BlobCodec`     | `final class implements BatchCodec`: `BlobCodec(BufferAllocator)`, `BlobCodec(BufferAllocator, int maxRecordBytes)`     |
+| `RowCodec<T>`   | `final class implements BatchCodec`: `RowCodec(Serde<T> valueSerde, RowBridge<T> rowBridge, BufferAllocator allocator)` |
+| `ArrowIpcSerde` | `final class implements Serde<VectorSchemaRoot>`: `ArrowIpcSerde(BufferAllocator)`                                      |
 
 `BlobCodec` constants: `DEFAULT_MAX_RECORD_BYTES` (`900 * 1024`), `KEY_COLUMN`
 (`__key`), `TIMESTAMP_COLUMN` (`__timestamp`), `PARTITION_COLUMN` (`__partition`),
@@ -217,22 +217,22 @@ Returns the next offset to read. Does not commit offsets.
 
 ### Row bridges
 
-| Type | Signature |
-| --- | --- |
-| `RowBridge<T>` | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)` |
-| `JsonRowBridge<T>` | `final class implements RowBridge<T>`: `JsonRowBridge(Class<T>)`, `JsonRowBridge(Class<T>, ObjectMapper)` |
+| Type               | Signature                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `RowBridge<T>`     | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)` |
+| `JsonRowBridge<T>` | `final class implements RowBridge<T>`: `JsonRowBridge(Class<T>)`, `JsonRowBridge(Class<T>, ObjectMapper)`           |
 
 ### Operators
 
-| Type | Signature |
-| --- | --- |
-| `ColumnarProcessor` | `@FunctionalInterface void process(ColumnarContext context, VectorSchemaRoot batch)` |
-| `ColumnarContext` | `final class`: `void forward(VectorSchemaRoot batch)` |
-| `RowPredicate` | `@FunctionalInterface boolean test(VectorSchemaRoot batch, int row)` |
-| `RowValue` | `@FunctionalInterface Object value(VectorSchemaRoot batch, int row)` |
-| `DerivedColumn` | `record DerivedColumn(Field field, RowValue value)` |
-| `Aggregation` | `record Aggregation(String inputColumn, String outputColumn, AggregateFunction function)` |
-| `AggregateFunction` | `enum`: `COUNT`, `SUM`, `MIN`, `MAX` |
+| Type                | Signature                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `ColumnarProcessor` | `@FunctionalInterface void process(ColumnarContext context, VectorSchemaRoot batch)`      |
+| `ColumnarContext`   | `final class`: `void forward(VectorSchemaRoot batch)`                                     |
+| `RowPredicate`      | `@FunctionalInterface boolean test(VectorSchemaRoot batch, int row)`                      |
+| `RowValue`          | `@FunctionalInterface Object value(VectorSchemaRoot batch, int row)`                      |
+| `DerivedColumn`     | `record DerivedColumn(Field field, RowValue value)`                                       |
+| `Aggregation`       | `record Aggregation(String inputColumn, String outputColumn, AggregateFunction function)` |
+| `AggregateFunction` | `enum`: `COUNT`, `SUM`, `MIN`, `MAX`                                                      |
 
 `BuiltinOp` is a `public final class implements ColumnarProcessor`:
 
@@ -270,26 +270,26 @@ Package `io.krabka.streams.test`. See [Testing](testing.md) for usage.
 
 `public final class`
 
-| Member | Signature |
-| --- | --- |
-| constructor | `ColumnarTestDriver(BuiltColumnarTopology topology)` |
-| `pipeInput` | `void pipeInput(String topic, int partition, byte[] key, byte[] value, long timestamp)` |
-| `pipeBatch` | `void pipeBatch(String topic, List<ConsumedRecord> records)` |
-| `isOutputEmpty` | `boolean isOutputEmpty(String topic)` |
-| `outputSize` | `int outputSize(String topic)` |
-| `readOutput` | `ProduceRecord readOutput(String topic)`, which throws `NoSuchElementException` |
-| `drainOutput` | `List<ProduceRecord> drainOutput(String topic)` |
+| Member          | Signature                                                                               |
+| --------------- | --------------------------------------------------------------------------------------- |
+| constructor     | `ColumnarTestDriver(BuiltColumnarTopology topology)`                                    |
+| `pipeInput`     | `void pipeInput(String topic, int partition, byte[] key, byte[] value, long timestamp)` |
+| `pipeBatch`     | `void pipeBatch(String topic, List<ConsumedRecord> records)`                            |
+| `isOutputEmpty` | `boolean isOutputEmpty(String topic)`                                                   |
+| `outputSize`    | `int outputSize(String topic)`                                                          |
+| `readOutput`    | `ProduceRecord readOutput(String topic)`, which throws `NoSuchElementException`         |
+| `drainOutput`   | `List<ProduceRecord> drainOutput(String topic)`                                         |
 
 ### SchemaRegistryStub
 
 `public final class ... implements AutoCloseable`
 
-| Member | Signature |
-| --- | --- |
-| constructor | `SchemaRegistryStub() throws IOException`, which binds `127.0.0.1` on an ephemeral port |
-| `uri` | `URI uri()` |
-| `requestCount` | `int requestCount(String method, String path)` |
-| `close` | `void close()` |
+| Member         | Signature                                                                               |
+| -------------- | --------------------------------------------------------------------------------------- |
+| constructor    | `SchemaRegistryStub() throws IOException`, which binds `127.0.0.1` on an ephemeral port |
+| `uri`          | `URI uri()`                                                                             |
+| `requestCount` | `int requestCount(String method, String path)`                                          |
+| `close`        | `void close()`                                                                          |
 
 This module also re-exports Apache Kafka's `kafka-streams-test-utils`, including
 `TopologyTestDriver`.

@@ -47,7 +47,7 @@ custom processor that reads whatever it needs from a single batch.
 ### Blob records are split, never merged
 
 `BlobCodec` splits an over-sized batch into several records but never combines small
-batches. A batch whose *single row* exceeds `maxRecordBytes` is emitted at full size and
+batches. A batch whose _single row_ exceeds `maxRecordBytes` is emitted at full size and
 may be rejected by the broker.
 
 ### Aggregate output types are fixed

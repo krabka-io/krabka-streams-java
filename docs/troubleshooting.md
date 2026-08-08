@@ -64,7 +64,7 @@ failing. Check registry reachability, and whether ID `7` exists at all
 
 Under `LOOKUP_ONLY`, the exact schema is not registered under that subject. Register it
 first, or switch to `AUTO_REGISTER` in development. Remember that Avro subjects hold the
-*canonical parsing form*, so a schema differing only in documentation or field order
+_canonical parsing form_, so a schema differing only in documentation or field order
 still matches, while any structural difference does not.
 
 `40401` means the subject itself does not exist.
@@ -99,7 +99,7 @@ at the first record.
 
 ### `JSON Schema validation failed: ...`
 
-The record body does not satisfy the *writer's* schema. Serialization is never
+The record body does not satisfy the _writer's_ schema. Serialization is never
 validated, so an upstream producer can emit a document that violates its own registered
 schema. Set `validate = false` to accept it, or fix the producer.
 
