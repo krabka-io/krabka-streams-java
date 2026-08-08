@@ -19,11 +19,11 @@ jobs:
         broker: [apache-kafka-4.3.1, krabka-0.3.8]
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          distribution: temurin
-          java-version: 17
-      - uses: gradle/actions/setup-gradle@v6
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
       - name: Start Apache Kafka 4.3.1
         if: matrix.broker == 'apache-kafka-4.3.1'
         run: |
@@ -82,7 +82,7 @@ jobs:
       - name: Run broker integration tests
         env:
           KRABKA_INTEGRATION_BOOTSTRAP: localhost:9092
-        run: ./gradlew :krabka-streams-test-utils:integrationTest
+        run: bazel test //krabka-streams-test-utils:integration_tests
       - name: Show broker log
         if: always()
         run: docker logs broker
@@ -93,11 +93,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          distribution: temurin
-          java-version: 17
-      - uses: gradle/actions/setup-gradle@v6
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
       - name: Start krabka broker and schema registry
         run: |
           docker network create krabka-registry-it
@@ -137,7 +137,7 @@ jobs:
       - name: Run schema registry integration test
         env:
           KRABKA_INTEGRATION_SCHEMA_REGISTRY: http://localhost:8081
-        run: ./gradlew :krabka-streams-test-utils:integrationTest
+        run: bazel test //krabka-streams-test-utils:integration_tests
       - name: Show service logs
         if: always()
         run: |

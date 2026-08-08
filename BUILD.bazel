@@ -1,0 +1,23 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@npm//:markdownlint-cli2/package_json.bzl", markdownlint_cli2 = "bin")
+load("@npm//:prettier/package_json.bzl", prettier = "bin")
+
+exports_files(["maven_install.json"])
+
+npm_link_all_packages()
+
+MARKDOWN_FILES = glob(
+    ["**/*.md"],
+    exclude = ["bazel-*/**"],
+)
+
+prettier.prettier_test(
+    name = "check_markdown_format",
+    args = ["--check", "**/*.md"],
+    data = MARKDOWN_FILES + [".prettierrc.json"],
+)
+
+markdownlint_cli2.markdownlint_cli2_test(
+    name = "lint_markdown",
+    data = MARKDOWN_FILES + [".markdownlint-cli2.jsonc"],
+)
