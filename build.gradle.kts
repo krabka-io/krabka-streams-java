@@ -108,3 +108,55 @@ subprojects {
         }
     }
 }
+
+// Markdown formatting and linting. The tools are prettier and markdownlint-cli2,
+// pinned in package.json and configured in .prettierrc.json and
+// .markdownlint-cli2.jsonc. They need Node.js and npm on the PATH.
+val npmCommand = if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm"
+val markdownGroup = "markdown"
+
+val installMarkdownTools = tasks.register<Exec>("installMarkdownTools") {
+    description = "Installs the pinned prettier and markdownlint-cli2 versions."
+    group = markdownGroup
+    workingDir = layout.projectDirectory.asFile
+    commandLine(npmCommand, "ci", "--no-audit", "--no-fund")
+    inputs.file(layout.projectDirectory.file("package.json"))
+    inputs.file(layout.projectDirectory.file("package-lock.json"))
+    outputs.file(layout.projectDirectory.file("node_modules/.package-lock.json"))
+}
+
+val markdownInputs = fileTree(layout.projectDirectory) {
+    include("**/*.md")
+    include(".prettierrc.json")
+    include(".prettierignore")
+    include(".markdownlint-cli2.jsonc")
+    exclude("node_modules/**", "**/build/**", ".gradle/**")
+}
+
+val formatMarkdown = tasks.register<Exec>("formatMarkdown") {
+    description = "Rewrites every Markdown file in prettier's style, aligning tables."
+    group = markdownGroup
+    dependsOn(installMarkdownTools)
+    workingDir = layout.projectDirectory.asFile
+    commandLine(npmCommand, "run", "format:markdown")
+}
+
+tasks.register<Exec>("checkMarkdownFormat") {
+    description = "Fails when a Markdown file is not in prettier's style."
+    group = markdownGroup
+    dependsOn(installMarkdownTools)
+    mustRunAfter(formatMarkdown)
+    workingDir = layout.projectDirectory.asFile
+    commandLine(npmCommand, "run", "checkFormat:markdown")
+    inputs.files(markdownInputs)
+}
+
+tasks.register<Exec>("lintMarkdown") {
+    description = "Runs markdownlint over every Markdown file."
+    group = markdownGroup
+    dependsOn(installMarkdownTools)
+    mustRunAfter(formatMarkdown)
+    workingDir = layout.projectDirectory.asFile
+    commandLine(npmCommand, "run", "lint:markdown")
+    inputs.files(markdownInputs)
+}

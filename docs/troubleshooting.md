@@ -1,0 +1,236 @@
+# Troubleshooting
+
+Messages are quoted as they appear. Search this page for the text of the exception you
+received.
+
+## Startup and configuration
+
+### `InaccessibleObjectException`, or an Arrow memory error on the first batch
+
+Arrow 19 needs `--add-opens=java.base/java.nio=ALL-UNNAMED`. Add it to the JVM that runs
+columnar code, including applications, tests, and any tooling. See
+[Configuration](configuration.md#jvm-flags).
+
+### The client never reaches `RUNNING`, or the group coordinator rejects the protocol
+
+The broker does not support the streams group protocol, or `streams.version=1` is not
+finalized. Check [broker requirements](configuration.md#broker-requirements). To run
+against an older broker, set `group.protocol=classic` explicitly, since `withDefaults`
+keeps your value.
+
+### No standby task ever appears
+
+Under the streams protocol the broker decides the standby count. On Apache Kafka 4.3.1
+set `group.streams.num.standby.replicas=1` on the broker;
+`StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG` alone is not enough.
+
+### `integrationTest` reports zero tests
+
+Both integration tests are gated on environment variables. Set
+`KRABKA_INTEGRATION_BOOTSTRAP` or `KRABKA_INTEGRATION_SCHEMA_REGISTRY`. The task
+declares both as inputs, so a changed value forces a re-run.
+
+## Schema registry
+
+### `schema ID for orders-value is not resolved; call registerSubject and prewarm first`
+
+The serializer found no ID for the subject. Causes, in order of likelihood:
+
+1. `registerSubject(topic)` was never called for this serde.
+2. `prewarm()` was called but not awaited. It returns a future.
+3. `prewarm()` failed; the future completed exceptionally and nothing checked it.
+4. The topic at run time differs from the one passed to `registerSubject`, so the
+   computed subject differs.
+5. A `RowCodec` is calling the serde with an empty topic name, so the subject is
+   `-value`. See [Limitations](limitations.md#rowcodec-passes-an-empty-topic-name-to-serdes).
+
+```java
+serde.registerSubject("orders");
+cache.prewarm().join();                                  // await it
+assert cache.idForSubject("orders-value").isPresent();   // verify it
+```
+
+### `SchemaFetchPendingException: writer schema for id 7 is pending fetch`
+
+Expected on the first record carrying an unseen schema ID. The fetch is already running;
+retry the record. The exception extends Kafka's `RetriableException`, so a Streams
+deserialization exception handler or a plain consumer retry handles it.
+
+It becomes a problem only if it repeats indefinitely, which means the fetch keeps
+failing. Check registry reachability, and whether ID `7` exists at all
+(`GET /schemas/ids/7`).
+
+### `schema registry returned HTTP 404: {"error_code":40403,...}`
+
+Under `LOOKUP_ONLY`, the exact schema is not registered under that subject. Register it
+first, or switch to `AUTO_REGISTER` in development. Remember that Avro subjects hold the
+_canonical parsing form_, so a schema differing only in documentation or field order
+still matches, while any structural difference does not.
+
+`40401` means the subject itself does not exist.
+
+### `schema registry returned HTTP 409`
+
+The registry rejected the schema as incompatible with the subject's existing versions.
+Fix the schema or the subject's compatibility level; this library does not manage
+compatibility settings.
+
+### `schema registry request failed`, `statusCode() == -1`
+
+A transport failure: unreachable host, TLS failure, or timeout. The cause carries the
+underlying `IOException`. Configure timeouts and TLS on the `HttpClient` passed to the
+three-argument constructor.
+
+If the base URI includes a context path, that path is dropped. Point the client at the
+registry root.
+
+### `serde role does not match the Kafka key setting`
+
+A value serde was configured as `default.key.serde`, or the reverse. Use
+`AvroSerde.forKey` / `forValue` (and the equivalents) to match the position. This check
+only fires when Kafka configures the serde from configuration.
+
+### `Protobuf messageType mismatch: writer demo.Other, local demo.Order`
+
+The record was written by a different message type than the one this serde reads. Either
+the topic carries mixed types, or the subject resolved to the wrong schema ID. Under
+`USE_LATEST` the registry's `messageType` is adopted, which makes the mismatch visible
+at the first record.
+
+### `JSON Schema validation failed: ...`
+
+The record body does not satisfy the _writer's_ schema. Serialization is never
+validated, so an upstream producer can emit a document that violates its own registered
+schema. Set `validate = false` to accept it, or fix the producer.
+
+### `cannot serialize schema value` / `cannot deserialize schema value`
+
+A wrapper around a format-library failure. The cause has the real message: an Avro
+resolution error, a Protobuf parse failure, or a Jackson binding error.
+
+## Wire format
+
+### `schema frame is shorter than 5 bytes`
+
+The record value is not Confluent-framed. Common causes: a topic written by a plain
+serializer, a compacted tombstone handled as bytes, or a key deserialized with a value
+serde.
+
+### `invalid schema frame magic byte 0x01`
+
+Same class of problem. The first byte must be `0x00`, so some other framing is in use.
+
+### `truncated Protobuf message-index varint`
+
+A Protobuf frame was decoded from bytes that are not one, or the value was truncated in
+transit. Confirm the topic really carries Protobuf and that `ProtobufSerde` (not
+`AvroSerde`) is reading it.
+
+## Columnar
+
+### ``payload column `__key` collides with a reserved metadata column``
+
+Your Arrow payload uses one of the four reserved names. Rename the payload column; the
+reserved names cannot be shadowed.
+
+### `Arrow batch schemas differ`
+
+`BlobCodec.decode` received records whose Arrow payloads have different schemas. All
+records in one fetched batch must share a schema. Watch for `JsonRowBridge` inferring a
+different type upstream when the first non-null sample changes.
+
+### `decode called with an empty record batch`
+
+A codec was called with an empty list. `ColumnarRunner` guards against this; if you drive
+`runBatch` yourself, skip empty polls.
+
+### `cannot decode Arrow record 3`
+
+The record at index 3 in the fetched batch is not a valid Arrow IPC stream. The cause
+holds the underlying failure. Check whether that topic mixes Arrow and non-Arrow values.
+
+### `Arrow column does not exist: sku`
+
+`select`, `groupBy`, or an aggregation named a column that is not in the batch. Remember
+that `groupBy` drops metadata columns and replaces payload columns with the key and
+aggregate columns, so a downstream operator may be looking at a narrower schema than you
+expect.
+
+### `cannot write Arrow type Timestamp(MILLISECOND, null)`
+
+`withColumns` or `groupBy` tried to write a type outside the supported coercion table.
+Carry the value as UTF-8 text, or fill the vector in a custom processor. See
+[Limitations](limitations.md#writable-arrow-types-are-limited).
+
+### `groupBy requires at least one key column`
+
+An empty key collection was passed. Whole-batch aggregation without a key is not
+supported; group by a constant column added with `withColumns` if you need it.
+
+### ``duplicate node name `same` ``
+
+Two nodes share a name. Names must be unique across sources, operators, and sinks.
+
+### ``node `sink` has an invalid parent``
+
+The parent was added after the child, or the node has no parent. Add nodes in dependency
+order.
+
+### `topology has no source` / `topology has no sink`
+
+`build()` requires at least one of each.
+
+### `parent is not a node in this topology`
+
+A `ColumnarNode` from a different `ColumnarTopology` was used as a parent. Nodes are not
+portable between topologies.
+
+### The allocator throws on close
+
+Arrow reports outstanding allocations, which means a batch was not closed. Work through
+the [ownership rules](columnar-operators.md#buffer-ownership): a batch you created and
+did not forward is yours to close, and anything returned by `decode`,
+`rowsToBatch`, or an `ArrowIpcSerde` deserializer is yours as well. The exception names
+the leaked allocations.
+
+### `runBatch` returns an empty list
+
+Either the topic you passed matches no source, or the record list was empty. Both are
+silent by design. Check `topology.sourceTopics()`.
+
+### Output records have timestamp `0` or a null key
+
+`groupBy` drops the metadata columns, so a downstream sink has no `__timestamp` or
+`__key` to read. Group by those columns, or add them back with `withColumns`. `BlobCodec`
+always produces a null key by design, because it emits batches rather than keyed rows.
+
+### The broker rejects a produced record as too large
+
+`BlobCodec` splits at a 900 KiB soft cap by default, but a single row larger than the cap
+cannot be split further. Lower `maxRecordBytes`, raise the broker's `max.message.bytes`,
+or reduce row size.
+
+### Offsets never advance
+
+`ColumnarRunner.runPartitionOnce` returns the next offset and commits nothing. Store the
+returned value and pass it back on the next call.
+
+## Build
+
+### `-Werror` fails on a warning
+
+Compilation uses `-Xlint:all -Werror`. Fix the warning, or scope a `@SuppressWarnings`
+to the smallest possible element, which is what `ColumnarRunnerTest` does for Kafka's
+deprecated `MockConsumer` constructor.
+
+### Javadoc fails
+
+Javadoc runs with `Xdoclint:all,-missing`. Missing comments are fine; malformed HTML,
+bad `@link` targets, and broken tags are not.
+
+### A release job fails on missing credentials
+
+The release workflow asserts `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
+`SIGNING_KEY`, and `SIGNING_PASSWORD` before building. Signing is skipped entirely when
+`SIGNING_KEY` is blank, which is why local builds do not need a key. See
+[Build and release](build-and-release.md).

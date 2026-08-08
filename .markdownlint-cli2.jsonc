@@ -1,0 +1,31 @@
+{
+  // Rule reference: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+  "config": {
+    "default": true,
+
+    // Prettier owns emphasis, list, code fence, and table style. Turning these off
+    // keeps the linter from disagreeing with the formatter.
+    "MD004": false, // ul-style
+    "MD007": false, // ul-indent
+    "MD030": false, // list-marker-space
+    "MD035": false, // hr-style
+    "MD044": false, // proper-names
+    "MD049": false, // emphasis-style
+    "MD050": false, // strong-style
+
+    // Line length applies to prose only. Aligned tables and code samples are
+    // allowed to run wide.
+    "MD013": {
+      "line_length": 100,
+      "tables": false,
+      "code_blocks": false,
+      "headings": false
+    },
+
+    // Repeated headings are fine when they sit under different parents, which is
+    // how the per-module sections in the API reference are organized.
+    "MD024": { "siblings_only": true }
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules/**", "**/build/**", ".gradle/**"]
+}
