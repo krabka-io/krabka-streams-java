@@ -8,7 +8,8 @@ plugins {
 }
 
 group = "io.krabka"
-version = "1.0.0"
+// The version lives in gradle.properties so `bumpPatch`, `bumpMinor`, and `bumpMajor`
+// can rewrite it. Gradle applies it to this project and every subproject.
 
 val moduleDescriptions = mapOf(
     "krabka-streams" to "Apache Kafka Streams API and krabka defaults",
@@ -159,4 +160,103 @@ tasks.register<Exec>("lintMarkdown") {
     workingDir = layout.projectDirectory.asFile
     commandLine(npmCommand, "run", "lint:markdown")
     inputs.files(markdownInputs)
+}
+
+// Version bumping. `bumpPatch`, `bumpMinor`, and `bumpMajor` rewrite the version in
+// gradle.properties, update every place the documentation names the current version,
+// and open a CHANGELOG section for the new release.
+abstract class BumpVersionTask : DefaultTask() {
+    /** `major`, `minor`, or `patch`. */
+    @get:Input
+    abstract val part: Property<String>
+
+    /** Release date for the new CHANGELOG heading. Defaults to today. */
+    @get:Input
+    @get:Optional
+    abstract val releaseDate: Property<String>
+
+    @get:Internal
+    abstract val repositoryRoot: DirectoryProperty
+
+    @TaskAction
+    fun bump() {
+        val root = repositoryRoot.get().asFile
+        val properties = File(root, "gradle.properties")
+        val currentLine = Regex("(?m)^version=(.+)$").find(properties.readText())
+            ?: throw GradleException("gradle.properties has no version property")
+        val current = currentLine.groupValues[1].trim()
+        val next = next(current)
+
+        properties.writeText(properties.readText().replaceFirst(currentLine.value, "version=$next"))
+        logger.lifecycle("version $current -> $next")
+
+        val occurrence = Regex("(?<![\\w.-])" + Regex.escape(current) + "(?![\\w.-])")
+        documentationFiles(root).forEach { file ->
+            val original = file.readText()
+            val rewritten = original.replace(occurrence, next)
+            if (rewritten != original) {
+                file.writeText(rewritten)
+                val count = occurrence.findAll(original).count()
+                logger.lifecycle("  ${file.toRelativeString(root)}: $count reference(s)")
+            }
+        }
+
+        openChangelogSection(File(root, "CHANGELOG.md"), next)
+        logger.lifecycle("Describe the release in CHANGELOG.md, then review the diff before committing.")
+    }
+
+    private fun next(current: String): String {
+        val match = Regex("^(\\d+)\\.(\\d+)\\.(\\d+)$").find(current)
+            ?: throw GradleException("version `$current` is not major.minor.patch")
+        val (major, minor, patch) = match.destructured
+        return when (val requested = part.get()) {
+            "major" -> "${major.toInt() + 1}.0.0"
+            "minor" -> "$major.${minor.toInt() + 1}.0"
+            "patch" -> "$major.$minor.${patch.toInt() + 1}"
+            else -> throw GradleException("unknown version part `$requested`")
+        }
+    }
+
+    /**
+     * Every Markdown file that names the current version, except CHANGELOG.md, whose
+     * older entries describe releases that already happened.
+     */
+    private fun documentationFiles(root: File): List<File> =
+        (listOf(File(root, "README.md"), File(root, "PARITY.md"))
+            + (File(root, "docs").listFiles { file -> file.extension == "md" }?.toList() ?: emptyList()))
+            .filter { it.isFile }
+            .sorted()
+
+    private fun openChangelogSection(changelog: File, version: String) {
+        if (!changelog.isFile) {
+            return
+        }
+        val text = changelog.readText()
+        if (Regex("(?m)^## " + Regex.escape(version) + "\\b").containsMatchIn(text)) {
+            logger.lifecycle("  CHANGELOG.md already has a $version section")
+            return
+        }
+        val date = releaseDate.getOrElse(java.time.LocalDate.now().toString())
+        val heading = Regex("(?m)^# .+$").find(text)
+            ?: throw GradleException("CHANGELOG.md has no top-level heading")
+        val section = "\n\n## $version - $date\n\n- _Describe the changes in this release._"
+        changelog.writeText(
+            text.substring(0, heading.range.last + 1) + section + text.substring(heading.range.last + 1).trimStart('\n').let { "\n\n$it" },
+        )
+        logger.lifecycle("  CHANGELOG.md: opened the $version section")
+    }
+}
+
+val versionGroup = "versioning"
+val releaseDateProperty = providers.gradleProperty("releaseDate")
+
+listOf("major", "minor", "patch").forEach { part ->
+    tasks.register<BumpVersionTask>("bump${part.replaceFirstChar { it.uppercase() }}") {
+        description = "Increases the $part version and updates the documentation."
+        group = versionGroup
+        this.part.set(part)
+        releaseDate.set(releaseDateProperty)
+        repositoryRoot.set(layout.projectDirectory)
+        finalizedBy(formatMarkdown)
+    }
 }

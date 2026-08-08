@@ -119,7 +119,7 @@ See [Testing](docs/testing.md).
 
 ## Status
 
-Version `1.0.0` is ready for release. See [PARITY.md](PARITY.md) for the parity checklist,
+The current version is `1.0.0`. See [PARITY.md](PARITY.md) for the parity checklist,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [docs/limitations.md](docs/limitations.md)
 for what this version does not do.
 

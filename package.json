@@ -1,6 +1,5 @@
 {
   "name": "krabka-streams-java-docs-tooling",
-  "version": "1.0.0",
   "private": true,
   "description": "Markdown formatting and linting tools for krabka-streams-java",
   "license": "Apache-2.0",
