@@ -1,0 +1,25 @@
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
+
+java_library(
+    name = "krabka-streams",
+    srcs = glob(["src/main/java/**/*.java"]),
+    javacopts = ["--release", "17"],
+    visibility = ["//visibility:public"],
+    exports = [
+        "@krabka_streams_maven//:org_apache_kafka_kafka_clients",
+        "@krabka_streams_maven//:org_apache_kafka_kafka_streams",
+    ],
+)
+
+java_test(
+    name = "tests",
+    srcs = glob(["src/test/java/**/*.java"]),
+    args = ["execute", "--select-package=io.krabka.streams", "--fail-if-no-tests"],
+    javacopts = ["--release", "17"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    use_testrunner = False,
+    deps = [
+        ":krabka-streams",
+        "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
+    ],
+)

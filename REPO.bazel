@@ -1,0 +1,4 @@
+ignore_directories([
+    "**/node_modules",
+    "bazel-*",
+])
