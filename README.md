@@ -66,6 +66,19 @@ bazel test //...
 
 On Windows, use `gradlew.bat build`.
 
+To run Bazel builds on BuildBuddy RBE, create an ignored `user.bazelrc` containing
+your BuildBuddy API key:
+
+```text
+build --remote_header=x-buildbuddy-api-key=YOUR_API_KEY
+```
+
+Then enable the checked-in remote configuration:
+
+```shell
+bazel test //... --config=remote
+```
+
 To consume the source directly from another Bazel module, add this to its
 `MODULE.bazel` (replace the commit with the revision you want to pin):
 
