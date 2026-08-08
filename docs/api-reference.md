@@ -298,8 +298,8 @@ This module also re-exports Apache Kafka's `kafka-streams-test-utils`, including
 
 ## Compatibility
 
-`1.0.0` is the first release, so nothing is deprecated yet. The public surface above is
-what future releases will be judged against; package-private types
+Nothing is deprecated yet. The public surface above is what future releases will be
+judged against; package-private types
 (`AbstractSchemaSerde`, `ArrowBatchSupport`, `ProtobufSchemaPrinter`) may change at any
 time.
 

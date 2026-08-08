@@ -83,7 +83,8 @@ declare dependencies and module-specific test flags.
 
 | Setting                  | Value                                          | Where                   |
 | ------------------------ | ---------------------------------------------- | ----------------------- |
-| Group / version          | `io.krabka` / `1.0.0`                          | root build              |
+| Group                    | `io.krabka`                                    | root build              |
+| Version                  | `1.0.0`                                        | `gradle.properties`     |
 | Java toolchain           | 17                                             | root build              |
 | Compiler                 | `--release 17`, UTF-8, `-Xlint:all`, `-Werror` | root build              |
 | Javadoc                  | UTF-8, `Xdoclint:all,-missing`                 | root build              |
@@ -95,7 +96,8 @@ declare dependencies and module-specific test flags.
 unchecked casts, and `this`-escapes. Keep `@SuppressWarnings` scoped to the smallest
 element that needs it.
 
-`gradle.properties` enables the build cache, parallel execution, and the configuration
+`gradle.properties` holds the version and enables the build cache, parallel execution,
+and the configuration
 cache, with a 2 GB daemon heap. Configuration cache rules out reading environment
 variables at configuration time, which is why the `integrationTest` task declares them
 through `providers.environmentVariable(...)`.
@@ -103,6 +105,45 @@ through `providers.environmentVariable(...)`.
 Adding a module means creating the directory, adding it to `settings.gradle.kts`, and
 adding a POM description to the `moduleDescriptions` map in the root build. Publishing
 calls `getValue`, so a missing entry fails the build.
+
+## Version bumping
+
+The version lives in one place, the `version` property in `gradle.properties`, and
+three Gradle tasks move it:
+
+```shell
+./gradlew bumpPatch     # X.Y.Z becomes X.Y.(Z+1)
+./gradlew bumpMinor     # X.Y.Z becomes X.(Y+1).0
+./gradlew bumpMajor     # X.Y.Z becomes (X+1).0.0
+```
+
+Each task does three things:
+
+1. Rewrites `version` in `gradle.properties`. A minor bump resets the patch number and
+   a major bump resets both, so the result is always a clean semantic version.
+2. Replaces every standalone reference to the old version in `README.md`, `PARITY.md`,
+   and `docs/*.md`. That covers the dependency coordinates, the Maven snippet, and the
+   sentences that name the current release. A reference only matches when it stands
+   alone, so a `v` prefix or a `-SNAPSHOT` suffix keeps a version out of the rewrite.
+3. Opens a `CHANGELOG.md` section for the new version, dated today, with a placeholder
+   line to replace. Older entries are never touched, because they describe releases
+   that already happened.
+
+The tasks are finalized by `formatMarkdown`, since a longer version string changes the
+width of an aligned table.
+
+Two details worth knowing before you run one. Prose that describes a past release does
+not belong outside `CHANGELOG.md`, because the bump rewrites it; say what the current
+version does instead. And the replacement is textual, so if a version ever collides
+with a dependency version quoted in the docs, that quote moves too. Read the diff
+before committing.
+
+Override the date with `-PreleaseDate`, which is useful when the release lands on a
+different day than the bump:
+
+```shell
+./gradlew bumpMinor -PreleaseDate=2026-09-01
+```
 
 ## Continuous integration
 
@@ -182,13 +223,12 @@ Central Portal user tokens, not your Sonatype account password.
 
 ### Cutting a release
 
-1. Update `version` in `build.gradle.kts`.
-2. Add a `CHANGELOG.md` entry with the version and date.
-3. Update the version in `README.md` and in
-   [`docs/getting-started.md`](getting-started.md).
-4. Review [PARITY.md](../PARITY.md).
-5. Merge to `main` and confirm `ci.yml` and `integration.yml` are green.
-6. Tag `vX.Y.Z` and push the tag. `release.yml` does the rest.
+1. Run `./gradlew bumpPatch`, `bumpMinor`, or `bumpMajor`.
+2. Replace the placeholder line in the new `CHANGELOG.md` section with the real
+   changes, and read the rest of the diff.
+3. Review [PARITY.md](../PARITY.md).
+4. Merge to `main` and confirm `ci.yml` and `integration.yml` are green.
+5. Tag `vX.Y.Z` and push the tag. `release.yml` does the rest.
 
 To dry-run the publication without uploading anything:
 
