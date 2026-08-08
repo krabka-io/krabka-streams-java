@@ -70,9 +70,11 @@ public final class BuiltColumnarTopology {
                     input.close();
                 }
             } catch (RuntimeException error) {
-                input.close();
-                context.drain().forEach(VectorSchemaRoot::close);
-                outputs.forEach(VectorSchemaRoot::close);
+                var toClose = Collections.newSetFromMap(new IdentityHashMap<VectorSchemaRoot, Boolean>());
+                toClose.add(input);
+                toClose.addAll(context.drain());
+                toClose.addAll(outputs);
+                toClose.forEach(VectorSchemaRoot::close);
                 throw error;
             }
         }

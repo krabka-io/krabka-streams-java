@@ -5,6 +5,10 @@ It uses the Apache Kafka Streams API and adds krabka schema registry and Apache 
 
 The minimum Java version is 17.
 
+```kotlin
+implementation("io.krabka:krabka-streams:1.0.0")
+```
+
 ## Modules
 
 | Artifact | Purpose |
@@ -71,7 +75,7 @@ exports Apache Kafka's `TopologyTestDriver` for ordinary Kafka Streams topologie
 
 ## Status
 
-The `1.0.0` feature set is complete. See [PARITY.md](PARITY.md) for the parity checklist.
+Version `1.0.0` is ready for release. See [PARITY.md](PARITY.md) for the parity checklist.
 
 ## License
 

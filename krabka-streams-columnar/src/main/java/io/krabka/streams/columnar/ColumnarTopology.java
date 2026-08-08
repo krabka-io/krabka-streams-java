@@ -111,13 +111,16 @@ public final class ColumnarTopology {
 
     private ColumnarNode add(NodeDefinition definition) {
         Objects.requireNonNull(definition.name(), "name");
-        var node = new ColumnarNode(nodes.size());
+        var node = new ColumnarNode(this, nodes.size());
         nodes.add(definition);
         return node;
     }
 
     private void requireParent(ColumnarNode parent) {
-        if (parent == null || parent.index() < 0 || parent.index() >= nodes.size()) {
+        if (parent == null
+                || !parent.belongsTo(this)
+                || parent.index() < 0
+                || parent.index() >= nodes.size()) {
             throw new IllegalArgumentException("parent is not a node in this topology");
         }
     }
