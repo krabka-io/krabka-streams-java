@@ -11,3 +11,4 @@ build:remote --extra_execution_platforms=@toolchains_buildbuddy//platforms:linux
 build:remote --jobs=50
 build:remote --remote_timeout=10m
 build:remote --remote_download_minimal
+build:remote --remote_cache_compression
