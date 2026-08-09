@@ -5,8 +5,15 @@ module(
 
 bazel_dep(name = "rules_java", version = "9.3.0")
 bazel_dep(name = "rules_jvm_external", version = "7.1")
+bazel_dep(name = "toolchains_buildbuddy", version = "0.0.4")
 
 bazel_dep(name = "aspect_rules_js", version = "3.4.0", dev_dependency = True)
+
+buildbuddy = use_extension("@toolchains_buildbuddy//:extensions.bzl", "buildbuddy")
+
+register_toolchains(
+    "@toolchains_buildbuddy//toolchains/cc:ubuntu_gcc_x86_64",
+)
 
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(

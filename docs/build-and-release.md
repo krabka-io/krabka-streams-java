@@ -21,9 +21,20 @@
 ./gradlew publishToMavenLocal                # install into ~/.m2 for local consumption
 bazel build //...                            # compile every module
 bazel test //...                             # unit, formatting, and lint tests
+bazel test //... --config=remote             # run those actions on BuildBuddy RBE
 ```
 
 On Windows, use `gradlew.bat`.
+
+The remote config sends build events and actions to BuildBuddy Cloud. Authenticate local
+builds by creating an ignored `user.bazelrc` with the API key from BuildBuddy Quickstart:
+
+```text
+build --remote_header=x-buildbuddy-api-key=YOUR_API_KEY
+```
+
+GitHub Actions reads the same credential from the `BUILDBUDDY_API_KEY` repository secret.
+The integration workflow stays local because its tests connect to services on the runner.
 
 The integration suite is a separate task and needs live services:
 
