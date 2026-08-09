@@ -46,8 +46,8 @@ The serializer found no ID for the subject. Causes, in order of likelihood:
 
 ```java
 serde.registerSubject("orders");
-cache.prewarm().join();                                  // await it
-assert cache.idForSubject("orders-value").isPresent();   // verify it
+cache.prewarm().join(); // await it
+assert cache.idForSubject("orders-value").isPresent(); // verify it
 ```
 
 ### `SchemaFetchPendingException: writer schema for id 7 is pending fetch`

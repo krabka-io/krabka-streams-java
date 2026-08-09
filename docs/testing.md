@@ -6,7 +6,7 @@ without a broker or a registry. It depends on `krabka-streams`,
 `kafka-streams-test-utils`, so one test dependency covers the whole surface.
 
 ```kotlin
-testImplementation("io.krabka:krabka-streams-test-utils:1.0.0")
+testImplementation("io.krabka:krabka-streams-test-utils:1.1.0")
 ```
 
 Any test source set that touches Arrow needs the JVM flag:
@@ -25,22 +25,23 @@ artifact. Nothing about krabka changes how it works.
 ```java
 var builder = new StreamsBuilder();
 builder.stream("input", Consumed.with(STRINGS, STRINGS))
-        .filter((key, value) -> value.startsWith("keep"))
-        .groupByKey()
-        .count(Materialized.as("counts"))
-        .toStream()
-        .to("output", Produced.with(STRINGS, Serdes.Long()));
+    .filter((key, value) -> value.startsWith("keep"))
+    .groupByKey()
+    .count(Materialized.as("counts"))
+    .toStream()
+    .to("output", Produced.with(STRINGS, Serdes.Long()));
 
 try (var driver = new TopologyTestDriver(builder.build(), properties)) {
-    var input = driver.createInputTopic("input", STRINGS.serializer(), STRINGS.serializer());
-    var output = driver.createOutputTopic("output", STRINGS.deserializer(), Serdes.Long().deserializer());
+  var input = driver.createInputTopic("input", STRINGS.serializer(), STRINGS.serializer());
+  var output =
+      driver.createOutputTopic("output", STRINGS.deserializer(), Serdes.Long().deserializer());
 
-    input.pipeInput("a", "drop");
-    input.pipeInput("a", "keep-one");
-    input.pipeInput("a", "keep-two");
+  input.pipeInput("a", "drop");
+  input.pipeInput("a", "keep-one");
+  input.pipeInput("a", "keep-two");
 
-    assertEquals(Map.of("a", 2L), output.readKeyValuesToMap());
-    assertEquals(2L, driver.<String, Long>getKeyValueStore("counts").get("a"));
+  assertThat(output.readKeyValuesToMap()).usingRecursiveComparison().isEqualTo(Map.of("a", 2L));
+  assertThat(driver.<String, Long>getKeyValueStore("counts").get("a")).isEqualTo(2L);
 }
 ```
 
@@ -64,26 +65,28 @@ Runs a built columnar topology in-process and queues the produced records per to
 
 ```java
 try (var allocator = new RootAllocator()) {
-    var codec = new RowCodec<>(Serdes.String(), new JsonRowBridge<>(String.class), allocator);
-    var topology = new ColumnarTopology(allocator);
-    var source = topology.addSource("source", List.of("in"), codec);
-    topology.addSink("sink", "out", codec, source);
-    var driver = new ColumnarTestDriver(topology.build());
+  var codec = new RowCodec<>(Serdes.String(), new JsonRowBridge<>(String.class), allocator);
+  var topology = new ColumnarTopology(allocator);
+  var source = topology.addSource("source", List.of("in"), codec);
+  topology.addSink("sink", "out", codec, source);
+  var driver = new ColumnarTestDriver(topology.build());
 
-    driver.pipeInput("in", 0, bytes("a"), bytes("first"), 10);
-    driver.pipeInput("in", 0, bytes("b"), bytes("second"), 11);
+  driver.pipeInput("in", 0, bytes("a"), bytes("first"), 10);
+  driver.pipeInput("in", 0, bytes("b"), bytes("second"), 11);
 
-    assertEquals(2, driver.outputSize("out"));
-    var first = driver.readOutput("out");
-    assertArrayEquals(bytes("a"), first.key());
-    assertEquals(10, first.timestamp());
+  assertThat(driver.outputSize("out")).isEqualTo(2);
+  assertThat(driver.readOutput("out"))
+      .usingRecursiveComparison()
+      .isEqualTo(new ProduceRecord(bytes("a"), bytes("first"), 10));
 }
 ```
 
 | Method                                               | Behavior                                                                                          |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `pipeInput(topic, partition, key, value, timestamp)` | Runs one record as a single-record batch. Offsets start at `0` per topic-partition and increment. |
+| `pipeInput(..., headers)`                            | The same operation with an ordered `List<RecordHeader>`.                                          |
 | `pipeBatch(topic, records)`                          | Runs a whole `List<ConsumedRecord>` as one batch. Offsets are whatever the records carry.         |
+| `failNext(fault)`                                    | Throws one deterministic fault before the next batch evaluation.                                  |
 | `outputSize(topic)` / `isOutputEmpty(topic)`         | Queue depth for a sink topic.                                                                     |
 | `readOutput(topic)`                                  | Removes and returns the oldest record; throws `NoSuchElementException` when empty.                |
 | `drainOutput(topic)`                                 | Removes and returns everything queued for the topic.                                              |
@@ -102,16 +105,18 @@ in-memory state. It binds to `127.0.0.1` on an ephemeral port.
 
 ```java
 try (var stub = new SchemaRegistryStub()) {
-    var client = new KrabkaSchemaRegistryClient(stub.uri());
-    var cache = new SchemaCache(client);
-    var serde = JsonSchemaSerde.forValue(Order.class, schema, cache, true);
+  var client = new KrabkaSchemaRegistryClient(stub.uri());
+  var cache = new SchemaCache(client);
+  var serde = JsonSchemaSerde.forValue(Order.class, schema, cache, true);
 
-    serde.registerSubject("orders");
-    cache.prewarm().join();
+  serde.registerSubject("orders");
+  cache.prewarm().join();
 
-    var bytes = serde.serializer().serialize("orders", new Order("o-1"));
-    assertEquals(new Order("o-1"), serde.deserializer().deserialize("orders", bytes));
-    assertEquals(1, stub.requestCount("POST", "/subjects/orders-value/versions"));
+  var bytes = serde.serializer().serialize("orders", new Order("o-1"));
+  assertThat(serde.deserializer().deserialize("orders", bytes))
+      .usingRecursiveComparison()
+      .isEqualTo(new Order("o-1"));
+  assertThat(stub.requestCount("POST", "/subjects/orders-value/versions")).isOne();
 }
 ```
 
@@ -214,6 +219,10 @@ wrong.
 ## Test conventions in this repository
 
 - JUnit 5 (`junit-bom:5.13.4`), configured for every subproject by the root build.
+- Parameter matrices use Google's TestParameterInjector JUnit 5 annotations; test
+  compilation retains parameter names with `-parameters`.
+- Expected and actual objects, records, collections, maps, and arrays use AssertJ's
+  recursive comparison so nested mismatches identify their field path.
 - Arrow tests wrap allocators and roots in try-with-resources, which turns a leaked
   buffer into a failing test.
 - Serde tests seed the cache instead of stubbing HTTP where possible; `RegistryStub`

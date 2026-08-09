@@ -49,12 +49,15 @@ subprojects {
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
         options.release.set(17)
-        options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+        options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror", "-parameters"))
     }
 
     tasks.withType<Javadoc>().configureEach {
         options.encoding = "UTF-8"
-        (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all,-missing", true)
+        (options as StandardJavadocDocletOptions).apply {
+            addBooleanOption("Xdoclint:all,-missing", true)
+            addBooleanOption("Werror", true)
+        }
     }
 
     tasks.withType<Jar>().configureEach {
@@ -77,6 +80,8 @@ subprojects {
     dependencies {
         "testImplementation"(platform("org.junit:junit-bom:5.13.4"))
         "testImplementation"("org.junit.jupiter:junit-jupiter")
+        "testImplementation"("com.google.testparameterinjector:test-parameter-injector-junit5:1.22")
+        "testImplementation"("org.assertj:assertj-core:3.27.7")
         "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 

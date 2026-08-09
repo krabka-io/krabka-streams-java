@@ -1,7 +1,6 @@
 package io.krabka.streams.schema;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
@@ -13,31 +12,29 @@ class ConfluentWireFormatTest {
     void encodesMagicBigEndianIdAndBody() {
         var frame = ConfluentWireFormat.encode(258, new byte[] {'x', 'y'});
 
-        assertArrayEquals(new byte[] {0, 0, 0, 1, 2, 'x', 'y'}, frame);
-        var decoded = ConfluentWireFormat.decode(frame);
-        assertEquals(258, decoded.schemaId());
-        assertArrayEquals(new byte[] {'x', 'y'}, decoded.body());
+        assertThat(frame).containsExactly(0, 0, 0, 1, 2, 'x', 'y');
+        assertThat(ConfluentWireFormat.decode(frame))
+                .usingRecursiveComparison()
+                .isEqualTo(new ConfluentWireFormat.Frame(258, new byte[] {'x', 'y'}));
     }
 
     @Test
     void usesSingleZeroForTopLevelProtobufMessage() {
         var frame = ConfluentWireFormat.encodeProtobuf(7, List.of(0), new byte[] {'p', 'b'});
 
-        assertArrayEquals(new byte[] {0, 0, 0, 0, 7, 0, 'p', 'b'}, frame);
-        var decoded = ConfluentWireFormat.decodeProtobuf(frame);
-        assertEquals(List.of(0), decoded.messageIndexes());
-        assertArrayEquals(new byte[] {'p', 'b'}, decoded.body());
+        assertThat(frame).containsExactly(0, 0, 0, 0, 7, 0, 'p', 'b');
+        assertThat(ConfluentWireFormat.decodeProtobuf(frame))
+                .usingRecursiveComparison()
+                .isEqualTo(new ConfluentWireFormat.ProtobufFrame(7, List.of(0), new byte[] {'p', 'b'}));
     }
 
     @Test
     void roundTripsNestedProtobufIndexes() {
         var frame = ConfluentWireFormat.encodeProtobuf(9, List.of(1, 0), new byte[] {3});
 
-        var decoded = ConfluentWireFormat.decodeProtobuf(frame);
-
-        assertEquals(9, decoded.schemaId());
-        assertEquals(List.of(1, 0), decoded.messageIndexes());
-        assertArrayEquals(new byte[] {3}, decoded.body());
+        assertThat(ConfluentWireFormat.decodeProtobuf(frame))
+                .usingRecursiveComparison()
+                .isEqualTo(new ConfluentWireFormat.ProtobufFrame(9, List.of(1, 0), new byte[] {3}));
     }
 
     @Test

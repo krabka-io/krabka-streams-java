@@ -27,11 +27,14 @@ class BlobCodecTest {
                 assertEquals(11L, ((BigIntVector) decoded.getVector(BlobCodec.TIMESTAMP_COLUMN)).get(2));
 
                 var output = codec.encode(decoded);
-                assertEquals(1, output.size());
-                assertEquals(11L, output.get(0).timestamp());
-                try (var payload = serde.deserialize(output.get(0).value())) {
-                    assertEquals(3, payload.getRowCount());
-                    assertEquals(2, payload.getFieldVectors().size());
+                assertEquals(2, output.size());
+                assertEquals(10L, output.get(0).timestamp());
+                assertEquals(11L, output.get(1).timestamp());
+                try (var firstPayload = serde.deserialize(output.get(0).value());
+                        var secondPayload = serde.deserialize(output.get(1).value())) {
+                    assertEquals(2, firstPayload.getRowCount());
+                    assertEquals(1, secondPayload.getRowCount());
+                    assertEquals(2, firstPayload.getFieldVectors().size());
                 }
             }
         }

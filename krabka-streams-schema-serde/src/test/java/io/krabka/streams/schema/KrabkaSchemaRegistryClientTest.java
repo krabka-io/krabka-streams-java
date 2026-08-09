@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.concurrent.CompletionException;
@@ -44,8 +45,14 @@ class KrabkaSchemaRegistryClientTest {
             var body = JSON.readTree(server.body("POST", "/subjects/orders-value/versions"));
             assertEquals("PROTOBUF", body.get("schemaType").asText());
             assertEquals("demo.Order", body.get("messageType").asText());
-            assertEquals(43, latest.id());
-            assertEquals("demo.Order", latest.messageType());
+            assertThat(latest)
+                    .usingRecursiveComparison()
+                    .isEqualTo(new KrabkaSchemaRegistryClient.RegisteredSchema(
+                            43,
+                            2,
+                            "syntax = \"proto3\";",
+                            "PROTOBUF",
+                            "demo.Order"));
         }
     }
 
@@ -74,11 +81,17 @@ class KrabkaSchemaRegistryClientTest {
             server.reply("DELETE", "/registry/subjects/orders-value", 200, "[1,2]");
             var client = new KrabkaSchemaRegistryClient(server.uri().resolve("/registry"));
 
-            assertEquals(java.util.List.of("orders-value"), client.subjects().join());
-            assertEquals(java.util.List.of(1, 2), client.versions("orders-value").join());
+            assertThat(client.subjects().join())
+                    .usingRecursiveComparison()
+                    .isEqualTo(java.util.List.of("orders-value"));
+            assertThat(client.versions("orders-value").join())
+                    .usingRecursiveComparison()
+                    .isEqualTo(java.util.List.of(1, 2));
             assertEquals("BACKWARD", client.compatibility("orders-value").join());
             assertEquals("FULL", client.setCompatibility("orders-value", "FULL").join());
-            assertEquals(java.util.List.of(1, 2), client.deleteSubject("orders-value", true).join());
+            assertThat(client.deleteSubject("orders-value", true).join())
+                    .usingRecursiveComparison()
+                    .isEqualTo(java.util.List.of(1, 2));
         }
     }
 }

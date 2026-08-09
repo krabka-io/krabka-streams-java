@@ -9,8 +9,8 @@ package-private `AbstractSchemaSerde`.
 
 ```java
 var serde = AvroSerde.generic(schema, cache, Role.VALUE);
-serde.registerSubject("orders");   // intern the subject for prewarming
-cache.prewarm().join();            // resolve the subject to a schema ID
+serde.registerSubject("orders"); // intern the subject for prewarming
+cache.prewarm().join(); // resolve the subject to a schema ID
 byte[] bytes = serde.serializer().serialize("orders", record);
 GenericRecord back = serde.deserializer().deserialize("orders", bytes);
 ```
@@ -68,8 +68,8 @@ Standard frame (Avro and JSON Schema):
 byte[] frame = ConfluentWireFormat.encode(258, body);
 // -> 00 00 00 01 02 <body>
 ConfluentWireFormat.Frame decoded = ConfluentWireFormat.decode(frame);
-decoded.schemaId();   // 258
-decoded.body();       // a defensive copy
+decoded.schemaId(); // 258
+decoded.body(); // a defensive copy
 ```
 
 Protobuf frames add a message-index path between the header and the body, encoded as
@@ -79,7 +79,7 @@ zig-zag varints:
 byte[] frame = ConfluentWireFormat.encodeProtobuf(7, List.of(0), body);
 // -> 00 00 00 00 07 00 <body>   (the single 0x00 is the shorthand for "first message")
 var protobuf = ConfluentWireFormat.decodeProtobuf(frame);
-protobuf.messageIndexes();   // List.of(0)
+protobuf.messageIndexes(); // List.of(0)
 ```
 
 An index path of exactly `[0]` is written as a single zero byte, matching the Confluent
@@ -176,7 +176,8 @@ reading.
 ```java
 JsonSchemaSerde<Order> values = JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true);
 JsonSchemaSerde<Order> keys = JsonSchemaSerde.forKey(Order.class, schemaJson, cache, true);
-JsonSchemaSerde<Order> custom = JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true, objectMapper);
+JsonSchemaSerde<Order> custom =
+    JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true, objectMapper);
 ```
 
 The `validate` flag checks serialization against the local schema and deserialization
@@ -195,6 +196,23 @@ The fourth factory takes an `ObjectMapper`, which is how you register modules
 A custom mapper is available for values only; keys use the default mapper.
 
 ## Choosing between them
+
+### Local compatibility before registration
+
+`LocalSchemaCompatibility` checks a previous and candidate schema without contacting a
+registry. Choose `BACKWARD`, `FORWARD`, or `FULL`:
+
+```java
+var result = LocalSchemaCompatibility.avro(previous, candidate, Mode.BACKWARD);
+if (!result.compatible()) {
+  throw new IllegalArgumentException(result.incompatibilities().toString());
+}
+```
+
+Avro delegates to Avro's reader/writer compatibility checker. JSON Schema checks type
+narrowing, required fields, and closed object properties. Protobuf compares
+`FileDescriptor` message fields by wire type,
+cardinality, and required-field presence.
 
 |                                | Avro                          | Protobuf                  | JSON Schema          |
 | ------------------------------ | ----------------------------- | ------------------------- | -------------------- |
@@ -216,27 +234,34 @@ pieces:
 
 ```java
 final class CborSerde<T> implements Serde<T> {
-    private final SchemaCache cache;
-    private final String subject;
+  private final SchemaCache cache;
+  private final String subject;
 
-    @Override
-    public Serializer<T> serializer() {
-        return (topic, value) -> value == null ? null : ConfluentWireFormat.encode(
-                cache.idForSubject(subject).orElseThrow(() ->
-                        new SerializationException("schema ID for " + subject + " is not resolved")),
+  @Override
+  public Serializer<T> serializer() {
+    return (topic, value) ->
+        value == null
+            ? null
+            : ConfluentWireFormat.encode(
+                cache
+                    .idForSubject(subject)
+                    .orElseThrow(
+                        () ->
+                            new SerializationException(
+                                "schema ID for " + subject + " is not resolved")),
                 encodeCbor(value));
-    }
+  }
 
-    @Override
-    public Deserializer<T> deserializer() {
-        return (topic, bytes) -> {
-            if (bytes == null) {
-                return null;
-            }
-            var frame = ConfluentWireFormat.decode(bytes);
-            return decodeCbor(cache.writerSchema(frame.schemaId()), frame.body());
-        };
-    }
+  @Override
+  public Deserializer<T> deserializer() {
+    return (topic, bytes) -> {
+      if (bytes == null) {
+        return null;
+      }
+      var frame = ConfluentWireFormat.decode(bytes);
+      return decodeCbor(cache.writerSchema(frame.schemaId()), frame.body());
+    };
+  }
 }
 ```
 

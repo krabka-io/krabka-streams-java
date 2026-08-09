@@ -31,7 +31,8 @@ The injected-client constructor configures TLS, proxies, and timeouts. A conveni
 constructor accepts a username and password for HTTP Basic authentication:
 
 ```java
-var httpClient = HttpClient.newBuilder()
+var httpClient =
+    HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))
         .sslContext(sslContext)
         .build();
@@ -63,7 +64,9 @@ Records returned by the client:
 
 ```java
 public record SchemaReference(String name, String subject, int version) {}
+
 public record RegisteredSchema(..., List<SchemaReference> references) {}
+
 public record FetchedSchema(String schema, String messageType, List<SchemaReference> references) {}
 ```
 
@@ -86,11 +89,12 @@ Every failure path produces a `SchemaRegistryException`, wrapped in a
 
 ```java
 try {
-    client.schemaById(7).join();
+  client.schemaById(7).join();
 } catch (CompletionException error) {
-    if (error.getCause() instanceof SchemaRegistryException registry && registry.statusCode() == 404) {
-        // the ID does not exist
-    }
+  if (error.getCause() instanceof SchemaRegistryException registry
+      && registry.statusCode() == 404) {
+    // the ID does not exist
+  }
 }
 ```
 
@@ -125,7 +129,7 @@ locally derived one; the other two keep the local value.
 ```java
 @FunctionalInterface
 public interface SubjectNameStrategy {
-    String subject(String topic, Role role);
+  String subject(String topic, Role role);
 }
 ```
 
@@ -145,9 +149,9 @@ calculation.
 ### The prewarm cycle
 
 ```java
-serde.registerSubject("orders");        // interns the subject; no I/O
+serde.registerSubject("orders"); // interns the subject; no I/O
 otherSerde.registerSubject("payments"); // idempotent per subject
-cache.prewarm().join();                 // one registry call per interned subject
+cache.prewarm().join(); // one registry call per interned subject
 ```
 
 `registerSubject` calls `cache.intern(subject, kind, schema, messageType)`, which uses
@@ -172,8 +176,10 @@ Subjects that are already resolved are simply resolved again.
 ### Reading writer schemas
 
 ```java
-public String writerSchema(int schemaId);        // throws SchemaFetchPendingException on a miss
-public String writerMessageType(int schemaId);   // null when unknown
+public String writerSchema(int schemaId); // throws SchemaFetchPendingException on a miss
+
+public String writerMessageType(int schemaId); // null when unknown
+
 public OptionalInt idForSubject(String subject);
 ```
 
@@ -188,11 +194,11 @@ retry the record. By the time the retry arrives, the fetch has usually completed
 
 ```java
 while (true) {
-    try {
-        return serde.deserializer().deserialize(topic, bytes);
-    } catch (SchemaFetchPendingException pending) {
-        Thread.sleep(10);       // the fetch for pending.schemaId() is already running
-    }
+  try {
+    return serde.deserializer().deserialize(topic, bytes);
+  } catch (SchemaFetchPendingException pending) {
+    Thread.sleep(10); // the fetch for pending.schemaId() is already running
+  }
 }
 ```
 
@@ -224,11 +230,11 @@ var keySerde = AvroSerde.forKey(OrderKey.class, cache);
 orderSerde.registerSubject("orders");
 keySerde.registerSubject("orders");
 
-cache.prewarm().join();   // fails fast if either subject is unregistered
+cache.prewarm().join(); // fails fast if either subject is unregistered
 
 var builder = new StreamsBuilder();
 builder.stream("orders", Consumed.with(keySerde, orderSerde))
-        .to("orders-copy", Produced.with(keySerde, orderSerde));
+    .to("orders-copy", Produced.with(keySerde, orderSerde));
 ```
 
 Calling `prewarm().join()` before `streams.start()` turns a registry problem into a

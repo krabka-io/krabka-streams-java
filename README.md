@@ -6,7 +6,7 @@ It uses the Apache Kafka Streams API and adds krabka schema registry and Apache 
 The minimum Java version is 17.
 
 ```kotlin
-implementation("io.krabka:krabka-streams:1.0.0")
+implementation("io.krabka:krabka-streams:1.1.0")
 ```
 
 ## Modules
@@ -48,7 +48,8 @@ unchanged. The only krabka-specific step is the configuration helper, which enab
 streams group protocol.
 
 ```java
-var settings = Map.<String, Object>of(
+var settings =
+    Map.<String, Object>of(
         StreamsConfig.APPLICATION_ID_CONFIG, "order-counter",
         StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 
@@ -84,7 +85,7 @@ To consume the source directly from another Bazel module, add this to its
 `MODULE.bazel` (replace the commit with the revision you want to pin):
 
 ```starlark
-bazel_dep(name = "krabka_streams_java", version = "1.0.0")
+bazel_dep(name = "krabka_streams_java", version = "1.1.0")
 git_override(
     module_name = "krabka_streams_java",
     remote = "https://github.com/krabka-io/krabka-streams-java.git",
@@ -127,7 +128,8 @@ See [Schema registry](docs/schema-registry.md) and [Serdes](docs/serdes.md).
 ## Arrow columnar processing
 
 Columnar topologies use `VectorSchemaRoot`. Each fetched topic partition batch is one processing unit.
-The built-in operations are filter, select, with-columns, and group-by aggregate.
+The built-in operations are filter, select, with-columns, cumulative and windowed
+group-by, plus stateful event-time joins.
 
 Arrow 19 needs this JVM option when it uses direct buffers:
 
@@ -135,10 +137,13 @@ Arrow 19 needs this JVM option when it uses direct buffers:
 --add-opens=java.base/java.nio=ALL-UNNAMED
 ```
 
-The metadata columns are `__key`, `__timestamp`, `__partition`, and `__offset`.
+The metadata columns are `__key`, `__timestamp`, `__partition`, `__offset`, and
+`__headers`.
 Colliding payload names are escaped and restored automatically. `BlobCodec` packs Arrow
 IPC output under a 900 KiB hard limit. Built topologies retain processor and aggregate
-state across fetched batches.
+state per logical partition across fetched batches. The group runner adds snapshots,
+rebalance hooks, metrics, acknowledged asynchronous sends, and skip or dead-letter
+error policies. `GzipBatchCodec` provides bounded per-record compression.
 
 See [Columnar processing](docs/columnar.md) and [Columnar operators](docs/columnar-operators.md).
 
@@ -152,7 +157,7 @@ See [Testing](docs/testing.md).
 
 ## Status
 
-The current version is `1.0.0`. See [PARITY.md](PARITY.md) for the parity checklist,
+The current version is `1.1.0`. See [PARITY.md](PARITY.md) for the parity checklist,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [runtime constraints](docs/limitations.md).
 
 ## License

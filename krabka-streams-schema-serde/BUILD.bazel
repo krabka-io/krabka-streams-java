@@ -3,7 +3,7 @@ load("@rules_java//java:defs.bzl", "java_library", "java_test")
 java_library(
     name = "krabka-streams-schema-serde",
     srcs = glob(["src/main/java/**/*.java"]),
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     visibility = ["//visibility:public"],
     deps = [
         "//krabka-streams",
@@ -27,11 +27,13 @@ java_test(
     name = "tests",
     srcs = glob(["src/test/java/**/*.java"]),
     args = ["execute", "--select-package=io.krabka.streams.schema", "--fail-if-no-tests"],
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     main_class = "org.junit.platform.console.ConsoleLauncher",
     use_testrunner = False,
     deps = [
         ":krabka-streams-schema-serde",
+        "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
+        "@krabka_streams_maven//:org_assertj_assertj_core",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
     ],
 )

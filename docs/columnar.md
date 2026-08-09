@@ -2,8 +2,9 @@
 
 `krabka-streams-columnar` processes Kafka records as Apache Arrow batches instead of
 one record at a time. It is a separate execution model from Kafka Streams: it does not
-build a `Topology`, does not use state stores, and does not participate in a streams
-group. It is meant for analytical work where per-record dispatch dominates the cost.
+build a Kafka `Topology`, but its runner can participate in a consumer group and retain
+partition-local state. It is meant for analytical work where per-record dispatch
+dominates the cost.
 
 ## The batch model
 
@@ -22,11 +23,13 @@ consumer.poll ──► List<ConsumedRecord> ──► BatchCodec.decode ──�
 The processor instance created when a topology is built survives across calls to
 `runBatch`. Built-in `groupBy` therefore accumulates across batches, and custom joins
 or windows can keep state in their `ColumnarProcessor`. Build once and reuse the
-`BuiltColumnarTopology` when state must survive polls.
+`BuiltColumnarTopology` when state must survive polls. Processor instances are isolated
+by logical partition number, so co-partitioned source topics can join without sharing
+state with another partition.
 
 ## Reserved metadata columns
 
-Every decoded batch carries four columns that hold Kafka record metadata:
+Every decoded batch carries five columns that hold Kafka record metadata:
 
 | Column        | Arrow type         | Contents                                      |
 | ------------- | ------------------ | --------------------------------------------- |
@@ -34,14 +37,15 @@ Every decoded batch carries four columns that hold Kafka record metadata:
 | `__timestamp` | `Int(64, signed)`  | record timestamp                              |
 | `__partition` | `Int(32, signed)`  | source partition                              |
 | `__offset`    | `Int(64, signed)`  | source offset                                 |
+| `__headers`   | `Binary`           | ordered Kafka headers, including null values  |
 
 They are appended after the payload columns, in that order. A colliding payload name
 is escaped in the processing batch; `BlobCodec.payloadColumn(name)` returns that name.
 The sink restores the original payload name before encoding.
 
 The names are also exposed as constants (`BlobCodec.KEY_COLUMN`, `TIMESTAMP_COLUMN`,
-`PARTITION_COLUMN`, and `OFFSET_COLUMN`) so you can reference them without hardcoding
-strings.
+`PARTITION_COLUMN`, `OFFSET_COLUMN`, and `HEADERS_COLUMN`) so you can reference them
+without hardcoding strings.
 
 Under `BlobCodec`, one Kafka record expands to many rows, and each of those rows
 receives a copy of that record's metadata. That is what makes `__offset` useful: it
@@ -51,8 +55,9 @@ tells you which record a row came from.
 
 ```java
 public interface BatchCodec {
-    VectorSchemaRoot decode(List<ConsumedRecord> records);
-    List<ProduceRecord> encode(VectorSchemaRoot batch);
+  VectorSchemaRoot decode(List<ConsumedRecord> records);
+
+  List<ProduceRecord> encode(VectorSchemaRoot batch);
 }
 ```
 
@@ -65,8 +70,8 @@ Use this when producers write Arrow IPC streams as record values, so each Kafka 
 already holds many rows.
 
 ```java
-var codec = new BlobCodec(allocator);                  // 900 KiB soft cap
-var tight = new BlobCodec(allocator, 512 * 1024);      // custom cap
+var codec = new BlobCodec(allocator); // 900 KiB soft cap
+var tight = new BlobCodec(allocator, 512 * 1024); // custom cap
 ```
 
 Decoding reads each record value as an Arrow IPC stream, attaches metadata columns, and
@@ -75,13 +80,11 @@ otherwise the codec throws `Arrow batch schemas differ`. A record that fails to 
 reports its position: `cannot decode Arrow record 3`. An empty record list throws
 `decode called with an empty record batch`.
 
-Encoding drops the metadata columns, serializes the payload as Arrow IPC records, and
-emits them with a `null` key. It packs the largest consecutive row range that fits
-under `maxRecordBytes`. A single row that exceeds the cap throws `ColumnarException`
-instead of sending a record the broker will reject.
-
-The output timestamp is the `__timestamp` of the **last** row in the batch, or `0` when
-the column is absent or null. All records produced from one batch share that timestamp.
+Encoding drops the metadata columns and serializes the payload as Arrow IPC records.
+It packs the largest consecutive rows that fit under `maxRecordBytes` and share one
+key, timestamp, and header list, then applies that envelope to the output record. A
+single row that exceeds the cap throws `ColumnarException` instead of sending a record
+the broker will reject.
 
 `DEFAULT_MAX_RECORD_BYTES` is `900 * 1024`, chosen to stay under a 1 MiB broker message
 limit with room for headers and framing. Raise it only alongside `max.message.bytes`.
@@ -104,13 +107,18 @@ rows and encodes back to _n_ records.
 
 Topologies pass the source or sink topic into `RowCodec`, so topic-derived schema
 subjects work the same way here as in ordinary Kafka consumers and producers.
+Keys, timestamps, and ordered headers round-trip through their reserved columns.
+
+Wrap any codec in `GzipBatchCodec` for per-record GZIP compression. The default
+decompression ceiling is 16 MiB and can be overridden in the constructor.
 
 ### RowBridge and JsonRowBridge
 
 ```java
 public interface RowBridge<T> {
-    VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator allocator);
-    List<T> batchToRows(VectorSchemaRoot batch);
+  VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator allocator);
+
+  List<T> batchToRows(VectorSchemaRoot batch);
 }
 ```
 
@@ -121,12 +129,16 @@ record Order(String id, long amount, List<String> tags) {}
 
 var bridge = new JsonRowBridge<>(Order.class);
 try (var batch = bridge.rowsToBatch(orders, allocator)) {
-    List<Order> back = bridge.batchToRows(batch);
+  List<Order> back = bridge.batchToRows(batch);
 }
 ```
 
 Column inference uses the first non-null sample and is retained by the bridge for every
 later batch. To pin it up front, pass an Arrow `Schema` to the constructor.
+
+`JsonRowBridge.fromJsonSchema(type, schema)` derives fields from JSON Schema
+`properties`, `required`, local `$ref`, primitive types, arrays, objects, and base64
+content. Required fields reject nulls before a batch can escape.
 
 | JSON node         | Arrow type              | Notes                                           |
 | ----------------- | ----------------------- | ----------------------------------------------- |
@@ -143,7 +155,7 @@ round trip because the field metadata records that the column holds JSON text.
 Scalar types (primitives, arrays, `CharSequence`, `Number`, and `Boolean`) have no
 fields to spread across columns, so they are wrapped in a single column named `value`.
 That is why the batch in `RowCodec` with `JsonRowBridge<>(String.class)` has the schema
-`value, __key, __timestamp, __partition, __offset`.
+`value, __key, __timestamp, __partition, __offset, __headers`.
 
 A row that cannot be converted back throws
 `cannot convert Arrow row 2 to com.example.Order`.
@@ -157,7 +169,7 @@ uses it internally, and you can use it directly to read or write Arrow-valued to
 var serde = new ArrowIpcSerde(allocator);
 byte[] bytes = serde.serializer().serialize("transactions", batch);
 try (var decoded = serde.deserializer().deserialize("transactions", bytes)) {
-    // decoded is owned by the caller
+  // decoded is owned by the caller
 }
 ```
 
@@ -179,21 +191,22 @@ var topology = new ColumnarTopology(allocator);
 var source = topology.addSource("source", List.of("transactions"), codec);
 var large = topology.addOperator("large", BuiltinOp.filter(allocator, predicate), source);
 topology.addSink("archive", "large-transactions", codec, large);
-topology.addSink("audit", "audit-log", codec, large);       // fan-out
+topology.addSink("audit", "audit-log", codec, large); // fan-out
 var built = topology.build();
 ```
 
-| Method                                                             | Purpose                                                                           |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `addSource(name, topics, codec)`                                   | Decodes records for any of `topics`. At least one topic is required.              |
-| `addOperator(name, BuiltinOp, parent)`                             | Adds a built-in operator.                                                         |
-| `addOperator(name, Supplier<? extends ColumnarProcessor>, parent)` | Adds a custom processor; its supplier is invoked once when the topology is built. |
-| `addMerge(name, parents)`                                          | Concatenates two or more same-schema upstream branches.                           |
-| `addSink(name, topic, codec, parent)`                              | Encodes its parent's batches to `topic`.                                          |
-| `addPassThroughSink(name, topic, source)`                          | Copies source records byte-for-byte without codec work.                           |
-| `sourceTopics()`                                                   | Every topic named by any source, for subscribing a consumer.                      |
-| `validate()`                                                       | Checks the graph; also called by `build()`.                                       |
-| `build()`                                                          | Returns a reusable `BuiltColumnarTopology`.                                       |
+| Method                                                             | Purpose                                                                      |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `addSource(name, topics, codec)`                                   | Decodes records for any of `topics`. At least one topic is required.         |
+| `addOperator(name, BuiltinOp, parent)`                             | Adds a built-in operator.                                                    |
+| `addOperator(name, Supplier<? extends ColumnarProcessor>, parent)` | Adds a custom processor; its supplier is invoked once per logical partition. |
+| `addMerge(name, parents)`                                          | Concatenates two or more same-schema upstream branches.                      |
+| `addJoin(name, join, left, right)`                                 | Stateful co-partitioned inner equi-join within an event-time window.         |
+| `addSink(name, topic, codec, parent)`                              | Encodes its parent's batches to `topic`.                                     |
+| `addPassThroughSink(name, topic, source)`                          | Copies source records byte-for-byte without codec work.                      |
+| `sourceTopics()`                                                   | Every topic named by any source, for subscribing a consumer.                 |
+| `validate()`                                                       | Checks the graph; also called by `build()`.                                  |
+| `build()`                                                          | Returns a reusable `BuiltColumnarTopology`.                                  |
 
 `addSource`, `addOperator`, and `addSink` return a `ColumnarNode`, an opaque handle you
 pass as the parent of later nodes. A node from a different topology throws
@@ -218,16 +231,20 @@ added and returns the produced records:
 ```java
 List<ProducedToTopic> produced = built.runBatch("transactions", records);
 for (var output : produced) {
-    output.topic();            // sink topic
-    output.record().key();     // byte[] or null
-    output.record().value();
-    output.record().timestamp();
+  output.topic(); // sink topic
+  output.record().key(); // byte[] or null
+  output.record().value();
+  output.record().timestamp();
 }
 ```
 
 `runBatches(Map<String, List<ConsumedRecord>>)` evaluates several source topics
 together, which lets `addMerge` express fan-in across topics. Group runners use this
 form for each consumer poll.
+
+Each logical partition gets fresh operator and join instances. `snapshotPartition`,
+`restorePartition`, and `releasePartition` expose their lifecycle; `close()` releases
+every partition. Join state is bounded by its event-time window.
 
 Semantics worth knowing:
 
@@ -248,14 +265,17 @@ Semantics worth knowing:
 ### Records
 
 ```java
-public record ConsumedRecord(byte[] key, byte[] value, long timestamp, int partition, long offset) {}
-public record ProduceRecord(byte[] key, byte[] value, long timestamp) {}
+public record RecordHeader(String key, byte[] value) {}
+
+public record ConsumedRecord(..., List<RecordHeader> headers) {}
+
+public record ProduceRecord(..., List<RecordHeader> headers) {}
+
 public record ProducedToTopic(String topic, ProduceRecord record) {}
 ```
 
-`ConsumedRecord` and `ProduceRecord` copy their arrays on construction and on every
-accessor call, so they never alias consumer or producer buffers. `value` must not be
-`null`; pass `new byte[0]` for an empty value. `key` may be `null`.
+The records copy arrays and header lists at the boundary. Backward-compatible
+constructors omit `headers` and use an empty list.
 
 ## ColumnarRunner
 
@@ -263,7 +283,8 @@ accessor call, so they never alias consumer or producer buffers. `value` must no
 runners.
 
 ```java
-long next = ColumnarRunner.runPartitionOnce(
+long next =
+    ColumnarRunner.runPartitionOnce(
         topology, consumer, producer, "transactions", 0, offset, Duration.ofMillis(250));
 ```
 
@@ -276,7 +297,7 @@ In order, it:
 5. runs the topology (an overload accepts a pre-built instance);
 6. sends each produced record, passing `null` for a negative timestamp so the producer
    applies its own;
-7. flushes the producer;
+7. waits for every asynchronous producer acknowledgement;
 8. commits and returns the highest consumed offset plus one.
 
 For automatic partition discovery and rebalancing, create a reusable group runner. It
@@ -285,13 +306,20 @@ subscribes to every source topic and retains one built topology across polls:
 ```java
 var runner = ColumnarRunner.group(topology, consumer, producer);
 while (running) {
-    runner.runOnce(Duration.ofMillis(250));
+  runner.runOnce(Duration.ofMillis(250));
 }
 ```
 
 `runner.runOnceTransactional(timeout)` sends produced records and consumed offsets in
 one producer transaction. Configure and initialize the transactional producer before
 creating the runner.
+
+The full `group` overload accepts `ColumnarErrorPolicy`, `ColumnarStateStore`, and
+`ColumnarMetrics`. Policies are fail-fast, explicit skip, or dead-letter; failed state
+is rolled back before the policy is applied. `FileColumnarStateStore` atomically saves
+partition snapshots on revocation and restores them on assignment. Lost partitions
+are released without saving. `sendAsync(outputs, producer)` exposes the acknowledged,
+non-flushing producer flow directly.
 
 ## Next
 

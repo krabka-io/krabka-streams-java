@@ -63,14 +63,14 @@ blocked stream thread.
 
 ### The columnar model is a separate runtime
 
-`krabka-streams-columnar` does not build a Kafka `Topology` and does not join a streams
-group. It has its own node graph, its own runner, and its own test driver. Mixing the
-two models in one application means running them side by side, not composing them.
+`krabka-streams-columnar` does not build a Kafka `Topology`. It has its own node graph,
+consumer-group runner, partition state lifecycle, and test driver. Mixing the two
+models in one application means running them side by side, not composing them.
 
 Keeping them separate keeps the semantics visible. A Kafka Streams operator sees one
-record and can reach durable state; a columnar operator sees one fetched batch and has
-no state at all. A shared abstraction would obscure the fact that a columnar `groupBy`
-aggregates within a batch and nothing more.
+record and Kafka-managed stores; a columnar operator sees one fetched batch and
+partition-local state managed by `BuiltColumnarTopology`. Snapshots are explicit and
+the file store is local rather than a broker changelog.
 
 ### One fetched batch is the unit of work
 
@@ -85,14 +85,14 @@ everything is released when `runBatch` returns.
 
 ### Metadata travels as columns
 
-Kafka record metadata is projected into four reserved columns rather than kept in a
+Kafka record metadata is projected into five reserved columns rather than kept in a
 side structure. Operators then need no special API to filter on partition, sort by
 offset, or carry keys through a projection, because it is all column access. The cost is
-four reserved names, enforced at decode time with a clear error.
+five reserved names, enforced at decode time with a clear error.
 
 Under `BlobCodec`, where one record expands into many rows, each row keeps the
 metadata of the record it came from. `__offset` is therefore the link back from a row
-to its source record.
+to its source record. `__headers` preserves ordered, duplicate, and null-valued headers.
 
 ### Ownership is explicit because the memory is off-heap
 
@@ -157,7 +157,7 @@ consumer.poll ──► ConsumedRecord[] ──► source (BatchCodec.decode)
                                               │
                                     sink (BatchCodec.encode)
                                               │
-                                   ProducedToTopic[] ──► producer.send ──► flush
+                       ProducedToTopic[] ──► producer.send ──► acknowledgements
 ```
 
 ## Concurrency
@@ -168,7 +168,7 @@ consumer.poll ──► ConsumedRecord[] ──► source (BatchCodec.decode)
 | `SchemaCache`                | thread-safe; all state in `ConcurrentHashMap`                                   |
 | Serdes                       | thread-safe once the cache is prewarmed; the JSON validator cache is concurrent |
 | `ColumnarTopology`           | not thread-safe while building                                                  |
-| `BuiltColumnarTopology`      | thread-safe; calls are serialized to protect retained processor state           |
+| `BuiltColumnarTopology`      | thread-safe; serialized calls and state isolated by logical partition           |
 | `ColumnarTestDriver`         | not thread-safe                                                                 |
 | `SchemaRegistryStub`         | request handling is synchronized                                                |
 | Arrow allocators and roots   | not thread-safe; confine to one thread                                          |

@@ -2,6 +2,7 @@ package io.krabka.streams.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,7 +52,9 @@ class KafkaStreamsParityTest {
             input.pipeInput("a", "keep-one");
             input.pipeInput("a", "keep-two");
 
-            assertEquals(Map.of("a", 2L), output.readKeyValuesToMap());
+            assertThat(output.readKeyValuesToMap())
+                    .usingRecursiveComparison()
+                    .isEqualTo(Map.of("a", 2L));
             assertEquals(2L, driver.<String, Long>getKeyValueStore("counts").get("a"));
         }
     }
@@ -86,8 +89,12 @@ class KafkaStreamsParityTest {
             rightInput.pipeInput("a", "R", 1_000L);
             leftInput.pipeInput("advance", "L2", 11_000L);
 
-            assertEquals(KeyValue.pair("a", "L+R"), joined.readKeyValue());
-            assertEquals(KeyValue.pair("a", 1L), windowed.readKeyValue());
+            assertThat(joined.readKeyValue())
+                    .usingRecursiveComparison()
+                    .isEqualTo(KeyValue.pair("a", "L+R"));
+            assertThat(windowed.readKeyValue())
+                    .usingRecursiveComparison()
+                    .isEqualTo(KeyValue.pair("a", 1L));
         }
     }
 
@@ -118,7 +125,9 @@ class KafkaStreamsParityTest {
             versionInput.pipeInput("a", "old", 100L);
             versionInput.pipeInput("a", "new", 200L);
 
-            assertEquals(KeyValue.pair("order-1", "sku-1:widget"), enriched.readKeyValue());
+            assertThat(enriched.readKeyValue())
+                    .usingRecursiveComparison()
+                    .isEqualTo(KeyValue.pair("order-1", "sku-1:widget"));
             var versions = driver.<String, String>getVersionedKeyValueStore("versions");
             assertEquals("new", versions.get("a").value());
             assertEquals("old", versions.get("a", 150L).value());
@@ -149,8 +158,12 @@ class KafkaStreamsParityTest {
             input.pipeInput("a", "value");
             driver.advanceWallClockTime(Duration.ofSeconds(1));
 
-            assertEquals(KeyValue.pair("a", "VALUE"), output.readKeyValue());
-            assertEquals(KeyValue.pair("punctuator", "tick"), output.readKeyValue());
+            assertThat(output.readKeyValue())
+                    .usingRecursiveComparison()
+                    .isEqualTo(KeyValue.pair("a", "VALUE"));
+            assertThat(output.readKeyValue())
+                    .usingRecursiveComparison()
+                    .isEqualTo(KeyValue.pair("punctuator", "tick"));
             assertTrue(output.isEmpty());
             assertEquals(1, driver.<String, Integer>getKeyValueStore("processor-counts").get("a"));
         }

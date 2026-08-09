@@ -1,4 +1,5 @@
 build/
 **/build/
 .gradle/
+bazel-*/
 gradle/wrapper/

@@ -3,6 +3,7 @@ package io.krabka.streams.schema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.protobuf.StringValue;
 import java.net.URI;
@@ -63,7 +64,7 @@ class SchemaSerdesTest {
         var bytes = serde.serializer().serialize("orders", new Order("o-1"));
         var decoded = serde.deserializer().deserialize("orders", bytes);
 
-        assertEquals(new Order("o-1"), decoded);
+        assertThat(decoded).usingRecursiveComparison().isEqualTo(new Order("o-1"));
 
         var invalid = ConfluentWireFormat.encode(13, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertThrows(SerializationException.class, () -> serde.deserializer().deserialize("orders", invalid));
@@ -166,7 +167,9 @@ class SchemaSerdesTest {
         var serde = ProtobufSerde.forValue(defaultInstance, cache);
         var frame = ConfluentWireFormat.decodeProtobuf(
                 serde.serializer().serialize("messages", defaultInstance));
-        assertEquals(java.util.List.of(0, 0), frame.messageIndexes());
+        assertThat(frame.messageIndexes())
+                .usingRecursiveComparison()
+                .isEqualTo(java.util.List.of(0, 0));
     }
 
     record Order(String id) {

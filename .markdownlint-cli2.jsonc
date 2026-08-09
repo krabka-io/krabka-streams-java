@@ -27,5 +27,5 @@
     "MD024": { "siblings_only": true }
   },
   "globs": ["**/*.md"],
-  "ignores": ["node_modules/**", "**/build/**", ".gradle/**"]
+  "ignores": ["node_modules/**", "**/build/**", ".gradle/**", "bazel-*/**"]
 }

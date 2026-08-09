@@ -46,7 +46,8 @@ final class ArrowBatchSupport {
     static final String TIMESTAMP = "__timestamp";
     static final String PARTITION = "__partition";
     static final String OFFSET = "__offset";
-    static final List<String> RESERVED = List.of(KEY, TIMESTAMP, PARTITION, OFFSET);
+    static final String HEADERS = "__headers";
+    static final List<String> RESERVED = List.of(KEY, TIMESTAMP, PARTITION, OFFSET, HEADERS);
     private static final String PAYLOAD_NAME = "krabka.payload.name";
     private static final String PAYLOAD_PREFIX = "__payload_";
 
@@ -54,7 +55,8 @@ final class ArrowBatchSupport {
             new Field(KEY, FieldType.nullable(new ArrowType.Binary()), null),
             new Field(TIMESTAMP, FieldType.nullable(new ArrowType.Int(64, true)), null),
             new Field(PARTITION, FieldType.nullable(new ArrowType.Int(32, true)), null),
-            new Field(OFFSET, FieldType.nullable(new ArrowType.Int(64, true)), null));
+            new Field(OFFSET, FieldType.nullable(new ArrowType.Int(64, true)), null),
+            new Field(HEADERS, FieldType.nullable(new ArrowType.Binary()), null));
 
     private ArrowBatchSupport() {
     }
@@ -82,6 +84,7 @@ final class ArrowBatchSupport {
         var timestamp = (BigIntVector) result.getVector(TIMESTAMP);
         var partition = (IntVector) result.getVector(PARTITION);
         var offset = (BigIntVector) result.getVector(OFFSET);
+        var headers = (VarBinaryVector) result.getVector(HEADERS);
         for (int row = 0; row < metadata.size(); row++) {
             var value = metadata.get(row);
             if (value.key() == null) {
@@ -92,6 +95,7 @@ final class ArrowBatchSupport {
             timestamp.setSafe(row, value.timestamp());
             partition.setSafe(row, value.partition());
             offset.setSafe(row, value.offset());
+            headers.setSafe(row, encodeHeaders(value.headers()));
         }
         setValueCounts(result);
         return result;
@@ -119,6 +123,55 @@ final class ArrowBatchSupport {
         return result;
     }
 
+    static VectorSchemaRoot joinRows(
+            VectorSchemaRoot left,
+            VectorSchemaRoot right,
+            List<RowPair> pairs,
+            String leftPrefix,
+            String rightPrefix,
+            BufferAllocator allocator) {
+        var leftPayload = left.getSchema().getFields().stream()
+                .filter(field -> !RESERVED.contains(field.getName()))
+                .toList();
+        var rightPayload = right.getSchema().getFields().stream()
+                .filter(field -> !RESERVED.contains(field.getName()))
+                .toList();
+        var fields = new ArrayList<Field>();
+        leftPayload.forEach(field -> fields.add(prefixedPayloadField(field, leftPrefix)));
+        rightPayload.forEach(field -> fields.add(prefixedPayloadField(field, rightPrefix)));
+        fields.addAll(METADATA_FIELDS);
+        var names = new HashSet<String>();
+        fields.forEach(field -> {
+            if (!names.add(field.getName())) {
+                throw new ColumnarException("joined Arrow column name collides: " + field.getName());
+            }
+        });
+
+        var result = create(fields, pairs.size(), allocator);
+        for (int outputRow = 0; outputRow < pairs.size(); outputRow++) {
+            var pair = pairs.get(outputRow);
+            int outputColumn = 0;
+            for (var field : leftPayload) {
+                result.getVector(outputColumn++).copyFromSafe(
+                        pair.leftRow(), outputRow, left.getVector(field.getName()));
+            }
+            for (var field : rightPayload) {
+                result.getVector(outputColumn++).copyFromSafe(
+                        pair.rightRow(), outputRow, right.getVector(field.getName()));
+            }
+            for (var name : RESERVED) {
+                var source = left.getVector(name);
+                if (source == null || source.isNull(pair.leftRow())) {
+                    result.getVector(outputColumn++).setNull(outputRow);
+                } else {
+                    result.getVector(outputColumn++).copyFromSafe(pair.leftRow(), outputRow, source);
+                }
+            }
+        }
+        setValueCounts(result);
+        return result;
+    }
+
     static VectorSchemaRoot payload(VectorSchemaRoot root, BufferAllocator allocator) {
         var source = root.getSchema().getFields().stream()
                 .filter(field -> !RESERVED.contains(field.getName()))
@@ -138,6 +191,71 @@ final class ArrowBatchSupport {
 
     static String payloadColumn(String name) {
         return RESERVED.contains(name) ? PAYLOAD_PREFIX + name : name;
+    }
+
+    static List<RecordHeader> headers(FieldVector vector, int row) {
+        if (!(vector instanceof VarBinaryVector) || vector.isNull(row)) {
+            return List.of();
+        }
+        return decodeHeaders(((VarBinaryVector) vector).get(row));
+    }
+
+    private static byte[] encodeHeaders(List<RecordHeader> headers) {
+        try {
+            var bytes = new java.io.ByteArrayOutputStream();
+            try (var output = new java.io.DataOutputStream(bytes)) {
+                output.writeInt(headers.size());
+                for (var header : headers) {
+                    var key = header.key().getBytes(StandardCharsets.UTF_8);
+                    var value = header.value();
+                    output.writeInt(key.length);
+                    output.write(key);
+                    output.writeInt(value == null ? -1 : value.length);
+                    if (value != null) {
+                        output.write(value);
+                    }
+                }
+            }
+            return bytes.toByteArray();
+        } catch (java.io.IOException error) {
+            throw new AssertionError(error);
+        }
+    }
+
+    private static List<RecordHeader> decodeHeaders(byte[] bytes) {
+        try (var input = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes))) {
+            int count = input.readInt();
+            if (count < 0 || count > bytes.length / 8) {
+                throw new ColumnarException("invalid Kafka header count");
+            }
+            var result = new ArrayList<RecordHeader>(count);
+            for (int index = 0; index < count; index++) {
+                int keyLength = input.readInt();
+                if (keyLength < 0) {
+                    throw new ColumnarException("negative Kafka header key length");
+                }
+                var key = new String(readExact(input, keyLength), StandardCharsets.UTF_8);
+                int valueLength = input.readInt();
+                if (valueLength < -1) {
+                    throw new ColumnarException("invalid Kafka header value length");
+                }
+                result.add(new RecordHeader(key, valueLength < 0 ? null : readExact(input, valueLength)));
+            }
+            if (input.available() != 0) {
+                throw new ColumnarException("trailing bytes in Kafka headers");
+            }
+            return List.copyOf(result);
+        } catch (java.io.IOException error) {
+            throw new ColumnarException("cannot decode Kafka headers", error);
+        }
+    }
+
+    private static byte[] readExact(java.io.DataInputStream input, int length) throws java.io.IOException {
+        var bytes = input.readNBytes(length);
+        if (bytes.length != length) {
+            throw new ColumnarException("truncated Kafka headers");
+        }
+        return bytes;
     }
 
     static VectorSchemaRoot select(VectorSchemaRoot root, Collection<String> names, BufferAllocator allocator) {
@@ -449,6 +567,11 @@ final class ArrowBatchSupport {
         return renamed(field, original, metadata);
     }
 
+    private static Field prefixedPayloadField(Field field, String prefix) {
+        var restored = restoredPayloadField(field);
+        return renamed(restored, prefix + restored.getName(), restored.getMetadata());
+    }
+
     private static Field renamed(Field field, String name, java.util.Map<String, String> metadata) {
         var type = field.getFieldType();
         return new Field(
@@ -457,14 +580,22 @@ final class ArrowBatchSupport {
                 field.getChildren());
     }
 
-    record RowMetadata(byte[] key, long timestamp, int partition, long offset) {
+    record RowMetadata(byte[] key, long timestamp, int partition, long offset, List<RecordHeader> headers) {
+        RowMetadata(byte[] key, long timestamp, int partition, long offset) {
+            this(key, timestamp, partition, offset, List.of());
+        }
+
         RowMetadata {
             key = key == null ? null : key.clone();
+            headers = List.copyOf(headers);
         }
 
         @Override
         public byte[] key() {
             return key == null ? null : key.clone();
         }
+    }
+
+    record RowPair(int leftRow, int rightRow) {
     }
 }

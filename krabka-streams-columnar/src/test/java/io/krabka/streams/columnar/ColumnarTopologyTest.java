@@ -2,6 +2,7 @@ package io.krabka.streams.columnar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.apache.arrow.memory.RootAllocator;
@@ -33,12 +34,14 @@ class ColumnarTopologyTest {
                 var first = built.runBatch("in", input);
                 var second = built.runBatch("in", input);
 
-                assertEquals(List.of("out-a", "out-b"), first.stream().map(ProducedToTopic::topic).toList());
+                assertThat(first.stream().map(ProducedToTopic::topic).toList())
+                        .usingRecursiveComparison()
+                        .isEqualTo(List.of("out-a", "out-b"));
                 assertEquals(2, second.size());
                 try (var decoded = new ArrowIpcSerde(allocator).deserialize(first.get(0).record().value())) {
                     assertEquals(2, decoded.getRowCount());
                 }
-                assertEquals(List.of(), built.runBatch("other", input));
+                assertThat(built.runBatch("other", input)).isEmpty();
             }
         }
     }
@@ -85,7 +88,7 @@ class ColumnarTopologyTest {
             var malformed = new byte[] {1, 2, 3};
             var copied = passthrough.build().runBatch(
                     "raw-in", List.of(new ConsumedRecord(null, malformed, 4, 0, 0)));
-            org.junit.jupiter.api.Assertions.assertArrayEquals(malformed, copied.get(0).record().value());
+            assertThat(copied.get(0).record().value()).containsExactly(malformed);
         }
     }
 }

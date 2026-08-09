@@ -14,11 +14,11 @@ Java 17 and Java 21.
 
 ## Coordinates
 
-All artifacts share the group `io.krabka` and the version `1.0.0`.
+All artifacts share the group `io.krabka` and the version `1.1.0`.
 
 ```kotlin
 dependencies {
-    implementation(platform("io.krabka:krabka-streams-bom:1.0.0"))
+    implementation(platform("io.krabka:krabka-streams-bom:1.1.0"))
     implementation("io.krabka:krabka-streams")
     implementation("io.krabka:krabka-streams-schema-serde")
     implementation("io.krabka:krabka-streams-columnar")
@@ -32,7 +32,7 @@ Maven:
 <dependency>
   <groupId>io.krabka</groupId>
   <artifactId>krabka-streams</artifactId>
-  <version>1.0.0</version>
+  <version>1.1.0</version>
 </dependency>
 ```
 
@@ -67,13 +67,14 @@ import org.apache.kafka.streams.kstream.Produced;
 
 var builder = new StreamsBuilder();
 builder.stream("orders", Consumed.with(Serdes.String(), Serdes.String()))
-        .filter((key, value) -> value.startsWith("keep"))
-        .groupByKey()
-        .count(Materialized.as("counts"))
-        .toStream()
-        .to("order-counts", Produced.with(Serdes.String(), Serdes.Long()));
+    .filter((key, value) -> value.startsWith("keep"))
+    .groupByKey()
+    .count(Materialized.as("counts"))
+    .toStream()
+    .to("order-counts", Produced.with(Serdes.String(), Serdes.Long()));
 
-var settings = Map.<String, Object>of(
+var settings =
+    Map.<String, Object>of(
         StreamsConfig.APPLICATION_ID_CONFIG, "order-counter",
         StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
         StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
@@ -95,14 +96,14 @@ import io.krabka.streams.schema.KrabkaSchemaRegistryClient;
 import io.krabka.streams.schema.SchemaCache;
 import java.net.URI;
 
-record Order(String id, long amount) {
-}
+record Order(String id, long amount) {}
 
-String orderSchema = """
-        {"type":"object",
-         "properties":{"id":{"type":"string"},"amount":{"type":"integer"}},
-         "required":["id"]}
-        """;
+String orderSchema =
+    """
+    {"type":"object",
+     "properties":{"id":{"type":"string"},"amount":{"type":"integer"}},
+     "required":["id"]}
+    """;
 
 var client = new KrabkaSchemaRegistryClient(URI.create("http://localhost:8081"));
 var cache = new SchemaCache(client);
@@ -127,19 +128,21 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 
 try (var allocator = new RootAllocator()) {
-    var codec = new BlobCodec(allocator);
-    var topology = new ColumnarTopology(allocator);
-    var source = topology.addSource("source", List.of("transactions"), codec);
-    var large = topology.addOperator(
-            "large-only",
-            BuiltinOp.filter(allocator, (batch, row) ->
-                    ((BigIntVector) batch.getVector("amount")).get(row) > 1_000),
-            source);
-    topology.addSink("sink", "large-transactions", codec, large);
+  var codec = new BlobCodec(allocator);
+  var topology = new ColumnarTopology(allocator);
+  var source = topology.addSource("source", List.of("transactions"), codec);
+  var large =
+      topology.addOperator(
+          "large-only",
+          BuiltinOp.filter(
+              allocator,
+              (batch, row) -> ((BigIntVector) batch.getVector("amount")).get(row) > 1_000),
+          source);
+  topology.addSink("sink", "large-transactions", codec, large);
 
-    var built = topology.build();
-    // Feed built.runBatch(topic, records) from your own consumer loop,
-    // or use ColumnarRunner.runPartitionOnce.
+  var built = topology.build();
+  // Feed built.runBatch(topic, records) from your own consumer loop,
+  // or use ColumnarRunner.runPartitionOnce.
 }
 ```
 

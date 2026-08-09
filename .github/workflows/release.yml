@@ -39,6 +39,8 @@ jobs:
           test -n "$SIGNING_PASSWORD"
       - name: Verify release
         run: bazel test //...
+      - name: Package Javadocs
+        run: ./gradlew javadocJar
       - name: Sign and upload artifacts
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}

@@ -3,6 +3,7 @@ package io.krabka.streams.test;
 import io.krabka.streams.columnar.BuiltColumnarTopology;
 import io.krabka.streams.columnar.ConsumedRecord;
 import io.krabka.streams.columnar.ProduceRecord;
+import io.krabka.streams.columnar.RecordHeader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ public final class ColumnarTestDriver {
     private final BuiltColumnarTopology topology;
     private final Map<String, ArrayDeque<ProduceRecord>> outputs = new HashMap<>();
     private final Map<TopicPartition, Long> nextOffsets = new HashMap<>();
+    private final ArrayDeque<RuntimeException> faults = new ArrayDeque<>();
 
     public ColumnarTestDriver(BuiltColumnarTopology topology) {
         this.topology = Objects.requireNonNull(topology, "topology");
@@ -23,16 +25,35 @@ public final class ColumnarTestDriver {
 
     /** Runs one record through the topology. Offsets start at zero for each topic partition. */
     public void pipeInput(String topic, int partition, byte[] key, byte[] value, long timestamp) {
+        pipeInput(topic, partition, key, value, timestamp, List.of());
+    }
+
+    /** Runs one record, including immutable Kafka headers, through the topology. */
+    public void pipeInput(
+            String topic,
+            int partition,
+            byte[] key,
+            byte[] value,
+            long timestamp,
+            List<RecordHeader> headers) {
         var topicPartition = new TopicPartition(topic, partition);
         long offset = nextOffsets.getOrDefault(topicPartition, 0L);
+        pipeBatch(topic, List.of(new ConsumedRecord(key, value, timestamp, partition, offset, headers)));
         nextOffsets.put(topicPartition, offset + 1L);
-        pipeBatch(topic, List.of(new ConsumedRecord(key, value, timestamp, partition, offset)));
     }
 
     /** Runs one fetched partition batch through the topology. */
     public void pipeBatch(String topic, List<ConsumedRecord> records) {
+        if (!faults.isEmpty()) {
+            throw faults.remove();
+        }
         topology.runBatch(Objects.requireNonNull(topic, "topic"), List.copyOf(records)).forEach(output ->
                 outputs.computeIfAbsent(output.topic(), ignored -> new ArrayDeque<>()).add(output.record()));
+    }
+
+    /** Throws the supplied fault before the next batch evaluation, once. */
+    public void failNext(RuntimeException fault) {
+        faults.add(Objects.requireNonNull(fault, "fault"));
     }
 
     public boolean isOutputEmpty(String topic) {

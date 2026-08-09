@@ -29,6 +29,7 @@ public final class ColumnarTopology {
                 null,
                 null,
                 null,
+                null,
                 List.of()));
     }
 
@@ -47,6 +48,7 @@ public final class ColumnarTopology {
                 Objects.requireNonNull(processor, "processor"),
                 null,
                 null,
+                null,
                 List.of(parent)));
     }
 
@@ -57,7 +59,27 @@ public final class ColumnarTopology {
             throw new IllegalArgumentException("a merge needs at least two parents");
         }
         copied.forEach(this::requireParent);
-        return add(new NodeDefinition(name, NodeType.MERGE, List.of(), null, null, null, null, copied));
+        return add(new NodeDefinition(name, NodeType.MERGE, List.of(), null, null, null, null, null, copied));
+    }
+
+    /** Joins two co-partitioned branches by key within an event-time window. */
+    public ColumnarNode addJoin(
+            String name, ColumnarJoin join, ColumnarNode left, ColumnarNode right) {
+        requireParent(left);
+        requireParent(right);
+        if (left.equals(right)) {
+            throw new IllegalArgumentException("a join needs two different parents");
+        }
+        return add(new NodeDefinition(
+                name,
+                NodeType.JOIN,
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                Objects.requireNonNull(join, "join"),
+                List.of(left, right)));
     }
 
     public ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent) {
@@ -70,6 +92,7 @@ public final class ColumnarTopology {
                 null,
                 Objects.requireNonNull(topic, "topic"),
                 Objects.requireNonNull(codec, "codec"),
+                null,
                 List.of(parent)));
     }
 
@@ -86,6 +109,7 @@ public final class ColumnarTopology {
                 null,
                 null,
                 Objects.requireNonNull(topic, "topic"),
+                null,
                 null,
                 List.of(source)));
     }
@@ -158,6 +182,7 @@ public final class ColumnarTopology {
         SOURCE,
         OPERATOR,
         MERGE,
+        JOIN,
         SINK
     }
 
@@ -169,6 +194,7 @@ public final class ColumnarTopology {
             Supplier<? extends ColumnarProcessor> processor,
             String sinkTopic,
             BatchCodec sinkCodec,
+            ColumnarJoin join,
             List<ColumnarNode> parents) {
     }
 }

@@ -34,7 +34,7 @@ class BuiltinOpTest {
 
                     var selected = run(BuiltinOp.select(allocator, "user"), filtered);
                     try (selected) {
-                        assertEquals(5, selected.getFieldVectors().size());
+                        assertEquals(6, selected.getFieldVectors().size());
                         assertNull(selected.getVector("amount"));
                     }
 

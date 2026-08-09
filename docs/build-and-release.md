@@ -17,6 +17,7 @@
 ./gradlew test                               # unit tests only
 ./gradlew :krabka-streams-columnar:test      # one module
 ./gradlew javadoc                            # javadoc for every module
+./gradlew javadocJar                         # package every module's javadoc
 ./gradlew clean
 ./gradlew publishToMavenLocal                # install into ~/.m2 for local consumption
 bazel build //...                            # compile every module
@@ -99,7 +100,7 @@ declare dependencies and module-specific test flags.
 | Setting                  | Value                                          | Where                   |
 | ------------------------ | ---------------------------------------------- | ----------------------- |
 | Group                    | `io.krabka`                                    | root build              |
-| Version                  | `1.0.0`                                        | `gradle.properties`     |
+| Version                  | `1.1.0`                                        | `gradle.properties`     |
 | Java toolchain           | 17                                             | root build              |
 | Compiler                 | `--release 17`, UTF-8, `-Xlint:all`, `-Werror` | root build              |
 | Javadoc                  | UTF-8, `Xdoclint:all,-missing`                 | root build              |
@@ -203,18 +204,21 @@ Steps:
 1. Assert that `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, and
    `SIGNING_PASSWORD` are all non-empty, before anything is built.
 2. `bazel test //...` verifies the release sources.
-3. `./gradlew publishAllPublicationsToCentralPortalRepository` creates, signs, and uploads
+3. `./gradlew javadocJar` runs doclint with warnings as errors and packages the package
+   summaries and examples.
+4. `./gradlew publishAllPublicationsToCentralPortalRepository` creates, signs, and uploads
    the Maven artifacts. Gradle remains the publisher because it owns the POM, sources,
    Javadoc, and signing configuration.
-4. `POST` to the Central Portal `manual/upload/defaultRepository/io.krabka` endpoint with
+5. `POST` to the Central Portal `manual/upload/defaultRepository/io.krabka` endpoint with
    `publishing_type=automatic` to promote the deployment.
-5. `gh release create <tag> --verify-tag --generate-notes`.
+6. `gh release create <tag> --verify-tag --generate-notes`.
 
 ## Publishing
 
 Every subproject applies `maven-publish` and `signing`, and produces a `mavenJava`
 publication with the main, sources, Javadoc, and `all` jars. The root project publishes
-the `krabka-streams-bom` platform.
+the `krabka-streams-bom` platform. Each Javadoc JAR contains its package overview and a
+usage example, and the release workflow packages those JARs before any upload begins.
 
 The POM carries the module description from the root build, the project URL, the
 Apache-2.0 license, the `krabka-io` developer entry, and SCM coordinates, which is the

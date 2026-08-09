@@ -1,10 +1,11 @@
 # API reference
 
-Every public type in `1.0.0`, grouped by module. Types not listed here are
+Every public type in `1.1.0`, grouped by module. Types not listed here are
 package-private implementation details and are not part of the compatibility surface.
 
 Javadoc is published alongside each artifact (`-javadoc.jar`) and is generated with
-`Xdoclint:all,-missing`.
+`Xdoclint:all,-missing` plus `-Werror`. Every package summary includes a runnable-style
+usage example.
 
 ---
 
@@ -55,7 +56,9 @@ Nested records:
 
 ```java
 public record SchemaReference(String name, String subject, int version) {}
+
 public record RegisteredSchema(..., List<SchemaReference> references) {}
+
 public record FetchedSchema(String schema, String messageType, List<SchemaReference> references) {}
 ```
 
@@ -137,10 +140,17 @@ Uses the Protobuf message-index framing and verifies the writer's `messageType`.
 
 ```java
 public record Frame(int schemaId, byte[] body) {}
+
 public record ProtobufFrame(int schemaId, List<Integer> messageIndexes, byte[] body) {}
 ```
 
 Both records copy `body` on construction and on access.
+
+### LocalSchemaCompatibility
+
+Network-free pairwise checks for `BACKWARD`, `FORWARD`, and `FULL` modes. `avro` and
+`json` accept schema text; `protobuf` accepts two `FileDescriptor` values. Every check
+returns `Result(boolean compatible, List<String> incompatibilities)`.
 
 ### Enums and interfaces
 
@@ -176,6 +186,7 @@ Package `io.krabka.streams.columnar`.
 | `addOperator`        | `ColumnarNode addOperator(String name, BuiltinOp operator, ColumnarNode parent)`                              |
 | `addOperator`        | `ColumnarNode addOperator(String name, Supplier<? extends ColumnarProcessor> processor, ColumnarNode parent)` |
 | `addMerge`           | `ColumnarNode addMerge(String name, Collection<ColumnarNode> parents)`                                        |
+| `addJoin`            | `ColumnarNode addJoin(String name, ColumnarJoin join, ColumnarNode left, ColumnarNode right)`                 |
 | `addSink`            | `ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent)`                      |
 | `addPassThroughSink` | `ColumnarNode addPassThroughSink(String name, String topic, ColumnarNode source)`                             |
 | `sourceTopics`       | `List<String> sourceTopics()`                                                                                 |
@@ -186,10 +197,12 @@ Package `io.krabka.streams.columnar`.
 
 `public final class`. Validated, stateful, reusable, and synchronized.
 
-| Member       | Signature                                                                    |
-| ------------ | ---------------------------------------------------------------------------- |
-| `runBatch`   | `List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records)` |
-| `runBatches` | `List<ProducedToTopic> runBatches(Map<String, List<ConsumedRecord>> input)`  |
+| Member                | Signature                                                                    |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `runBatch`            | `List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records)` |
+| `runBatches`          | `List<ProducedToTopic> runBatches(Map<String, List<ConsumedRecord>> input)`  |
+| `runPartitionBatches` | evaluates one co-partitioned input map                                       |
+| state lifecycle       | `snapshotPartition`, `restorePartition`, `releasePartition`, and `close`     |
 
 ### ColumnarNode
 
@@ -201,49 +214,61 @@ Package `io.krabka.streams.columnar`.
 
 ```java
 public static long runPartitionOnce(
-        ColumnarTopology topology,
-        Consumer<byte[], byte[]> consumer,
-        Producer<byte[], byte[]> producer,
-        String topic,
-        int partition,
-        long offset,
-        Duration pollTimeout)
+    ColumnarTopology topology,
+    Consumer<byte[], byte[]> consumer,
+    Producer<byte[], byte[]> producer,
+    String topic,
+    int partition,
+    long offset,
+    Duration pollTimeout)
 ```
 
 Commits and returns the next offset. `group(...)` creates a subscribed reusable runner;
-group runners provide ordinary and transactional `runOnce` methods.
+group runners provide ordinary and transactional `runOnce` methods. The full overload
+accepts `ColumnarErrorPolicy`, `ColumnarStateStore`, and `ColumnarMetrics`.
+`sendAsync` returns a `CompletableFuture<Void>` for broker acknowledgements.
+
+Runner support types:
+
+- `ColumnarErrorPolicy`: `fail()`, `skip()`, or `deadLetter(topic)`.
+- `ColumnarMetrics`: lock-free counters exposed through an immutable `Snapshot`.
+- `ColumnarStateStore`: partition `load` and `save`; `none()` is ephemeral.
+- `FileColumnarStateStore`: atomically replaced snapshot files under a caller-owned path.
 
 ### Codecs
 
-| Type            | Signature                                                                                                               |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `BatchCodec`    | `interface`: decode/encode methods, with default topic-aware overloads                                                  |
-| `BlobCodec`     | `final class implements BatchCodec`: `BlobCodec(BufferAllocator)`, `BlobCodec(BufferAllocator, int maxRecordBytes)`     |
-| `RowCodec<T>`   | `final class implements BatchCodec`: `RowCodec(Serde<T> valueSerde, RowBridge<T> rowBridge, BufferAllocator allocator)` |
-| `ArrowIpcSerde` | `final class implements Serde<VectorSchemaRoot>`: `ArrowIpcSerde(BufferAllocator)`                                      |
+| Type             | Signature                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `BatchCodec`     | `interface`: decode/encode methods, with default topic-aware overloads                                                  |
+| `BlobCodec`      | `final class implements BatchCodec`: `BlobCodec(BufferAllocator)`, `BlobCodec(BufferAllocator, int maxRecordBytes)`     |
+| `GzipBatchCodec` | `final class implements BatchCodec`: bounded GZIP decorator for another codec                                           |
+| `RowCodec<T>`    | `final class implements BatchCodec`: `RowCodec(Serde<T> valueSerde, RowBridge<T> rowBridge, BufferAllocator allocator)` |
+| `ArrowIpcSerde`  | `final class implements Serde<VectorSchemaRoot>`: `ArrowIpcSerde(BufferAllocator)`                                      |
 
 `BlobCodec` constants: `DEFAULT_MAX_RECORD_BYTES` (`900 * 1024`), `KEY_COLUMN`
 (`__key`), `TIMESTAMP_COLUMN` (`__timestamp`), `PARTITION_COLUMN` (`__partition`),
-`OFFSET_COLUMN` (`__offset`), plus `payloadColumn(String)` for escaped collisions.
+`OFFSET_COLUMN` (`__offset`), `HEADERS_COLUMN` (`__headers`), plus
+`payloadColumn(String)` for escaped collisions.
 
 ### Row bridges
 
-| Type               | Signature                                                                                                             |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `RowBridge<T>`     | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)`   |
-| `JsonRowBridge<T>` | `final class implements RowBridge<T>`: constructors accept `Class<T>`, optional `ObjectMapper`, and optional `Schema` |
+| Type               | Signature                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `RowBridge<T>`     | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)` |
+| `JsonRowBridge<T>` | constructors accept `Class<T>`, optional `ObjectMapper` or Arrow `Schema`; `fromJsonSchema` derives fields          |
 
 ### Operators
 
-| Type                | Signature                                                                                                       |
-| ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `ColumnarProcessor` | `@FunctionalInterface void process(ColumnarContext context, VectorSchemaRoot batch)`                            |
-| `ColumnarContext`   | `final class`: `void forward(VectorSchemaRoot batch)`                                                           |
-| `RowPredicate`      | `@FunctionalInterface boolean test(VectorSchemaRoot batch, int row)`                                            |
-| `RowValue`          | `@FunctionalInterface Object value(VectorSchemaRoot batch, int row)`                                            |
-| `DerivedColumn`     | `record DerivedColumn(Field field, RowValue value)`                                                             |
-| `Aggregation`       | `record Aggregation(String inputColumn, String outputColumn, AggregateFunction function, ArrowType outputType)` |
-| `AggregateFunction` | `enum`: `COUNT`, `SUM`, `MIN`, `MAX`                                                                            |
+| Type                        | Signature                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ColumnarProcessor`         | `@FunctionalInterface void process(ColumnarContext context, VectorSchemaRoot batch)`                            |
+| `StatefulColumnarProcessor` | processor plus `snapshot()` and `restore(byte[])`                                                               |
+| `ColumnarContext`           | `final class`: `void forward(VectorSchemaRoot batch)`                                                           |
+| `RowPredicate`              | `@FunctionalInterface boolean test(VectorSchemaRoot batch, int row)`                                            |
+| `RowValue`                  | `@FunctionalInterface Object value(VectorSchemaRoot batch, int row)`                                            |
+| `DerivedColumn`             | `record DerivedColumn(Field field, RowValue value)`                                                             |
+| `Aggregation`               | `record Aggregation(String inputColumn, String outputColumn, AggregateFunction function, ArrowType outputType)` |
+| `AggregateFunction`         | `enum`: `COUNT`, `SUM`, `MIN`, `MAX`                                                                            |
 
 `BuiltinOp` is a `public final class implements ColumnarProcessor`:
 
@@ -251,20 +276,40 @@ group runners provide ordinary and transactional `runOnce` methods.
 static BuiltinOp filter(BufferAllocator allocator, RowPredicate predicate)
 static BuiltinOp select(BufferAllocator allocator, String... columns)
 static BuiltinOp withColumns(BufferAllocator allocator, DerivedColumn... columns)
-static BuiltinOp groupBy(BufferAllocator allocator, Collection<String> keys, Aggregation... aggregations)
+static BuiltinOp groupBy(
+    BufferAllocator allocator, Collection<String> keys, Aggregation... aggregations)
+static BuiltinOp windowedGroupBy(
+    BufferAllocator allocator,
+    Collection<String> keys,
+    Duration size,
+    Aggregation... aggregations)
+static BuiltinOp windowedGroupBy(
+    BufferAllocator allocator,
+    Collection<String> keys,
+    Duration size,
+    Duration retention,
+    Aggregation... aggregations)
 void process(ColumnarContext context, VectorSchemaRoot batch)
 ```
 
 ### Records and exceptions
 
 ```java
-public record ConsumedRecord(byte[] key, byte[] value, long timestamp, int partition, long offset) {}
-public record ProduceRecord(byte[] key, byte[] value, long timestamp) {}
+public record RecordHeader(String key, byte[] value) {}
+
+public record ConsumedRecord(..., List<RecordHeader> headers) {}
+
+public record ProduceRecord(..., List<RecordHeader> headers) {}
+
 public record ProducedToTopic(String topic, ProduceRecord record) {}
 
+public record ColumnarJoin(
+    String leftKey, String rightKey, Duration window, String leftPrefix, String rightPrefix) {}
+
 public final class ColumnarException extends RuntimeException {
-    public ColumnarException(String message);
-    public ColumnarException(String message, Throwable cause);
+  public ColumnarException(String message);
+
+  public ColumnarException(String message, Throwable cause);
 }
 ```
 
@@ -281,15 +326,16 @@ Package `io.krabka.streams.test`. See [Testing](testing.md) for usage.
 
 `public final class`
 
-| Member          | Signature                                                                               |
-| --------------- | --------------------------------------------------------------------------------------- |
-| constructor     | `ColumnarTestDriver(BuiltColumnarTopology topology)`                                    |
-| `pipeInput`     | `void pipeInput(String topic, int partition, byte[] key, byte[] value, long timestamp)` |
-| `pipeBatch`     | `void pipeBatch(String topic, List<ConsumedRecord> records)`                            |
-| `isOutputEmpty` | `boolean isOutputEmpty(String topic)`                                                   |
-| `outputSize`    | `int outputSize(String topic)`                                                          |
-| `readOutput`    | `ProduceRecord readOutput(String topic)`, which throws `NoSuchElementException`         |
-| `drainOutput`   | `List<ProduceRecord> drainOutput(String topic)`                                         |
+| Member          | Signature                                                                       |
+| --------------- | ------------------------------------------------------------------------------- |
+| constructor     | `ColumnarTestDriver(BuiltColumnarTopology topology)`                            |
+| `pipeInput`     | overloads accept record bytes and optional `List<RecordHeader>`                 |
+| `pipeBatch`     | `void pipeBatch(String topic, List<ConsumedRecord> records)`                    |
+| `failNext`      | injects one `RuntimeException` before the next batch evaluation                 |
+| `isOutputEmpty` | `boolean isOutputEmpty(String topic)`                                           |
+| `outputSize`    | `int outputSize(String topic)`                                                  |
+| `readOutput`    | `ProduceRecord readOutput(String topic)`, which throws `NoSuchElementException` |
+| `drainOutput`   | `List<ProduceRecord> drainOutput(String topic)`                                 |
 
 ### SchemaRegistryStub
 

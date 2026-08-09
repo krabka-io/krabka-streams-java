@@ -3,6 +3,7 @@ package io.krabka.streams.schema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -98,7 +99,9 @@ class SchemaCacheTest {
 
             var report = cache.prewarmReport().join();
 
-            assertEquals(8, report.resolved().get("good-value"));
+            assertThat(report.resolved())
+                    .usingRecursiveComparison()
+                    .isEqualTo(java.util.Map.of("good-value", 8));
             assertTrue(report.failures().containsKey("bad-value"));
         }
     }

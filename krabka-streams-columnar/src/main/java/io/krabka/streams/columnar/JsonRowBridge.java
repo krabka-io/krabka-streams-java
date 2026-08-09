@@ -43,15 +43,31 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
         this(type, objectMapper, Objects.requireNonNull(schema, "schema").getFields());
     }
 
+    /** Creates a bridge whose Arrow fields come from a JSON Schema instead of sample rows. */
+    public static <T> JsonRowBridge<T> fromJsonSchema(Class<T> type, String jsonSchema) {
+        return fromJsonSchema(type, jsonSchema, new ObjectMapper());
+    }
+
+    public static <T> JsonRowBridge<T> fromJsonSchema(
+            Class<T> type, String jsonSchema, ObjectMapper objectMapper) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(objectMapper, "objectMapper");
+        try {
+            var root = objectMapper.readTree(Objects.requireNonNull(jsonSchema, "jsonSchema"));
+            if (root == null || !root.isObject()) {
+                throw new IllegalArgumentException("JSON Schema must be an object");
+            }
+            return new JsonRowBridge<>(type, objectMapper, jsonSchemaFields(root, isScalar(type)));
+        } catch (java.io.IOException error) {
+            throw new IllegalArgumentException("invalid JSON Schema", error);
+        }
+    }
+
     private JsonRowBridge(Class<T> type, ObjectMapper objectMapper, List<Field> fields) {
         this.type = Objects.requireNonNull(type, "type");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
         this.fields = fields == null ? null : List.copyOf(fields);
-        this.scalar = type.isPrimitive()
-                || type.isArray()
-                || CharSequence.class.isAssignableFrom(type)
-                || Number.class.isAssignableFrom(type)
-                || Boolean.class == type;
+        this.scalar = isScalar(type);
     }
 
     @Override
@@ -73,15 +89,20 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
             }
         }
         var root = ArrowBatchSupport.create(batchFields, rows.size(), allocator);
-        for (int column = 0; column < batchFields.size(); column++) {
-            var field = batchFields.get(column);
-            var vector = root.getVector(column);
-            for (int row = 0; row < objects.size(); row++) {
-                writeJson(vector, row, objects.get(row).get(field.getName()), field);
+        try {
+            for (int column = 0; column < batchFields.size(); column++) {
+                var field = batchFields.get(column);
+                var vector = root.getVector(column);
+                for (int row = 0; row < objects.size(); row++) {
+                    writeJson(vector, row, objects.get(row).get(field.getName()), field);
+                }
             }
+            ArrowBatchSupport.setValueCounts(root);
+            return root;
+        } catch (RuntimeException error) {
+            root.close();
+            throw error;
         }
-        ArrowBatchSupport.setValueCounts(root);
-        return root;
     }
 
     @Override
@@ -134,6 +155,9 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
 
     private void writeJson(FieldVector vector, int row, JsonNode value, Field field) {
         if (value == null || value.isNull()) {
+            if (!field.isNullable()) {
+                throw new ColumnarException("required JSON field is null: " + field.getName());
+            }
             ArrowBatchSupport.setValue(vector, row, null);
             return;
         }
@@ -187,5 +211,78 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
         } catch (Exception error) {
             throw new ColumnarException("cannot read JSON field " + field.getName(), error);
         }
+    }
+
+    private static boolean isScalar(Class<?> type) {
+        return type.isPrimitive()
+                || type.isArray()
+                || CharSequence.class.isAssignableFrom(type)
+                || Number.class.isAssignableFrom(type)
+                || Boolean.class == type;
+    }
+
+    private static List<Field> jsonSchemaFields(JsonNode root, boolean scalar) {
+        if (scalar) {
+            return List.of(jsonSchemaField("value", root, false, root));
+        }
+        var properties = root.path("properties");
+        if (!properties.isObject()) {
+            throw new IllegalArgumentException("object JSON Schema has no properties");
+        }
+        var required = new java.util.HashSet<String>();
+        root.path("required").forEach(value -> required.add(value.asText()));
+        var fields = new ArrayList<Field>();
+        properties.properties().forEach(entry -> fields.add(jsonSchemaField(
+                entry.getKey(), entry.getValue(), !required.contains(entry.getKey()), root)));
+        return List.copyOf(fields);
+    }
+
+    private static Field jsonSchemaField(
+            String name, JsonNode declaration, boolean nullable, JsonNode root) {
+        var resolved = resolve(declaration, root);
+        var typeNode = resolved.path("type");
+        String type = null;
+        if (typeNode.isTextual()) {
+            type = typeNode.asText();
+        } else if (typeNode.isArray()) {
+            for (var candidate : typeNode) {
+                if (candidate.isTextual() && !"null".equals(candidate.asText())) {
+                    type = candidate.asText();
+                    break;
+                }
+            }
+            nullable = nullable || java.util.stream.StreamSupport.stream(typeNode.spliterator(), false)
+                    .anyMatch(candidate -> "null".equals(candidate.asText()));
+        }
+        ArrowType arrowType;
+        Map<String, String> metadata = Map.of();
+        if ("integer".equals(type)) {
+            arrowType = new ArrowType.Int(64, true);
+        } else if ("number".equals(type)) {
+            arrowType = new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
+        } else if ("boolean".equals(type)) {
+            arrowType = new ArrowType.Bool();
+        } else if ("object".equals(type) || "array".equals(type)) {
+            arrowType = new ArrowType.Utf8();
+            metadata = Map.of(JSON_METADATA, "true");
+        } else if ("base64".equals(resolved.path("contentEncoding").asText())) {
+            arrowType = new ArrowType.Binary();
+            metadata = Map.of(BINARY_METADATA, "true");
+        } else {
+            arrowType = new ArrowType.Utf8();
+        }
+        return new Field(name, new FieldType(nullable, arrowType, null, metadata), null);
+    }
+
+    private static JsonNode resolve(JsonNode declaration, JsonNode root) {
+        var reference = declaration.path("$ref");
+        if (!reference.isTextual() || !reference.asText().startsWith("#/")) {
+            return declaration;
+        }
+        var resolved = root.at(reference.asText().substring(1));
+        if (resolved.isMissingNode()) {
+            throw new IllegalArgumentException("unresolved JSON Schema reference " + reference.asText());
+        }
+        return resolved;
     }
 }
