@@ -3,7 +3,7 @@ load("@rules_java//java:defs.bzl", "java_library", "java_test")
 java_library(
     name = "krabka-streams-columnar",
     srcs = glob(["src/main/java/**/*.java"]),
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     visibility = ["//visibility:public"],
     deps = [
         "//krabka-streams",
@@ -23,12 +23,14 @@ java_test(
     name = "tests",
     srcs = glob(["src/test/java/**/*.java"]),
     args = ["execute", "--select-package=io.krabka.streams.columnar", "--fail-if-no-tests"],
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
     main_class = "org.junit.platform.console.ConsoleLauncher",
     use_testrunner = False,
     deps = [
         ":krabka-streams-columnar",
+        "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
+        "@krabka_streams_maven//:org_assertj_assertj_core",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
     ],
 )

@@ -24,12 +24,18 @@ public final class RowCodec<T> implements BatchCodec {
 
     @Override
     public VectorSchemaRoot decode(List<ConsumedRecord> records) {
+        return decode("", records);
+    }
+
+    @Override
+    public VectorSchemaRoot decode(String topic, List<ConsumedRecord> records) {
         var values = new ArrayList<T>(records.size());
         var metadata = new ArrayList<ArrowBatchSupport.RowMetadata>(records.size());
         for (var record : records) {
-            values.add(valueSerde.deserializer().deserialize("", record.value()));
+            values.add(valueSerde.deserializer().deserialize(
+                    topic, kafkaHeaders(record.headers()), record.value()));
             metadata.add(new ArrowBatchSupport.RowMetadata(
-                    record.key(), record.timestamp(), record.partition(), record.offset()));
+                    record.key(), record.timestamp(), record.partition(), record.offset(), record.headers()));
         }
         try (var payload = rowBridge.rowsToBatch(values, allocator)) {
             return ArrowBatchSupport.withMetadata(payload, metadata, allocator);
@@ -38,19 +44,34 @@ public final class RowCodec<T> implements BatchCodec {
 
     @Override
     public List<ProduceRecord> encode(VectorSchemaRoot batch) {
+        return encode("", batch);
+    }
+
+    @Override
+    public List<ProduceRecord> encode(String topic, VectorSchemaRoot batch) {
         try (var payload = ArrowBatchSupport.payload(batch, allocator)) {
             var rows = rowBridge.batchToRows(payload);
             var output = new ArrayList<ProduceRecord>(rows.size());
             var keys = batch.getVector(ArrowBatchSupport.KEY);
             var timestamps = batch.getVector(ArrowBatchSupport.TIMESTAMP);
+            var headers = batch.getVector(ArrowBatchSupport.HEADERS);
             for (int row = 0; row < rows.size(); row++) {
+                var recordHeaders = ArrowBatchSupport.headers(headers, row);
                 output.add(new ProduceRecord(
                         key(keys, row),
-                        valueSerde.serializer().serialize("", rows.get(row)),
-                        timestamp(timestamps, row)));
+                        valueSerde.serializer().serialize(
+                                topic, kafkaHeaders(recordHeaders), rows.get(row)),
+                        timestamp(timestamps, row),
+                        recordHeaders));
             }
             return List.copyOf(output);
         }
+    }
+
+    private static org.apache.kafka.common.header.Headers kafkaHeaders(List<RecordHeader> headers) {
+        var result = new org.apache.kafka.common.header.internals.RecordHeaders();
+        headers.forEach(header -> result.add(header.key(), header.value()));
+        return result;
     }
 
     private static byte[] key(org.apache.arrow.vector.FieldVector vector, int row) {

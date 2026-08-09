@@ -27,18 +27,21 @@ class BlobCodecTest {
                 assertEquals(11L, ((BigIntVector) decoded.getVector(BlobCodec.TIMESTAMP_COLUMN)).get(2));
 
                 var output = codec.encode(decoded);
-                assertEquals(1, output.size());
-                assertEquals(11L, output.get(0).timestamp());
-                try (var payload = serde.deserialize(output.get(0).value())) {
-                    assertEquals(3, payload.getRowCount());
-                    assertEquals(2, payload.getFieldVectors().size());
+                assertEquals(2, output.size());
+                assertEquals(10L, output.get(0).timestamp());
+                assertEquals(11L, output.get(1).timestamp());
+                try (var firstPayload = serde.deserialize(output.get(0).value());
+                        var secondPayload = serde.deserialize(output.get(1).value())) {
+                    assertEquals(2, firstPayload.getRowCount());
+                    assertEquals(1, secondPayload.getRowCount());
+                    assertEquals(2, firstPayload.getFieldVectors().size());
                 }
             }
         }
     }
 
     @Test
-    void rejectsReservedPayloadAndEmptyInput() {
+    void escapesReservedPayloadAndRejectsEmptyInput() {
         try (var allocator = new RootAllocator()) {
             var codec = new BlobCodec(allocator);
             assertThrows(ColumnarException.class, () -> codec.decode(List.of()));
@@ -52,9 +55,13 @@ class BlobCodecTest {
                     allocator)) {
                 ArrowBatchSupport.setValueCounts(bad);
                 var bytes = new ArrowIpcSerde(allocator).serialize(bad);
-                assertThrows(
-                        ColumnarException.class,
-                        () -> codec.decode(List.of(new ConsumedRecord(null, bytes, 0, 0, 0))));
+                try (var decoded = codec.decode(List.of(new ConsumedRecord(null, bytes, 0, 0, 0)))) {
+                    assertTrue(decoded.getVector(BlobCodec.payloadColumn(BlobCodec.KEY_COLUMN)) != null);
+                    var output = codec.encode(decoded);
+                    try (var restored = new ArrowIpcSerde(allocator).deserialize(output.get(0).value())) {
+                        assertTrue(restored.getVector(BlobCodec.KEY_COLUMN) != null);
+                    }
+                }
             }
         }
     }
@@ -76,6 +83,18 @@ class BlobCodecTest {
                     assertTrue(output.size() > 1);
                     assertTrue(output.stream().allMatch(record -> record.value().length <= 1_024));
                 }
+            }
+        }
+    }
+
+    @Test
+    void rejectsASingleRowOverTheHardCap() {
+        try (var allocator = new RootAllocator();
+                var payload = ArrowTestData.transactions(allocator, new String[] {"too-large"}, new long[] {1})) {
+            var codec = new BlobCodec(allocator, 1);
+            var bytes = new ArrowIpcSerde(allocator).serialize(payload);
+            try (var decoded = codec.decode(List.of(new ConsumedRecord(null, bytes, 0, 0, 0)))) {
+                assertThrows(ColumnarException.class, () -> codec.encode(decoded));
             }
         }
     }

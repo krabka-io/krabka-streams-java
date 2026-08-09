@@ -1,6 +1,7 @@
 package io.krabka.streams.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.krabka.streams.KrabkaStreamsConfig;
@@ -72,7 +73,9 @@ class BrokerCompatibilityIT {
             waitFor("both streams clients to run", () -> isRunning(first) && isRunning(second));
 
             var partitions = produceInput(bootstrap, inputTopic);
-            assertEquals(Map.of("alpha", 1L, "beta", 1L), readOutput(bootstrap, outputTopic));
+            assertThat(readOutput(bootstrap, outputTopic))
+                    .usingRecursiveComparison()
+                    .isEqualTo(Map.of("alpha", 1L, "beta", 1L));
             assertEquals(1L, query(first, second, "alpha", partitions.get("alpha")));
             assertEquals(1L, query(first, second, "beta", partitions.get("beta")));
             waitFor("a standby task", () -> hasStandbyTask(first) || hasStandbyTask(second));

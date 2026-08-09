@@ -4,6 +4,7 @@
     "com.fasterxml.jackson.core:jackson-core": -328762284,
     "com.fasterxml.jackson.core:jackson-databind": 1159874844,
     "com.google.protobuf:protobuf-java": 99127134,
+    "com.google.testparameterinjector:test-parameter-injector-junit5": -585723585,
     "com.networknt:json-schema-validator": 35984412,
     "org.apache.arrow:arrow-memory-core": -313467058,
     "org.apache.arrow:arrow-memory-netty": 1130185719,
@@ -12,7 +13,12 @@
     "org.apache.kafka:kafka-clients": -338642463,
     "org.apache.kafka:kafka-streams": 1057546454,
     "org.apache.kafka:kafka-streams-test-utils": 139859573,
+    "org.assertj:assertj-core": -1145412507,
+    "org.junit.jupiter:junit-jupiter-api": -1211975337,
+    "org.junit.jupiter:junit-jupiter-engine": -339976517,
+    "org.junit.platform:junit-platform-commons": -1068950919,
     "org.junit.platform:junit-platform-console-standalone": -1031571220,
+    "org.junit.platform:junit-platform-engine": -1268509005,
     "repositories": -1949687017
   },
   "__RESOLVED_ARTIFACTS_HASH": {
@@ -24,13 +30,22 @@
     "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml": -660811603,
     "com.fasterxml.jackson.datatype:jackson-datatype-jsr310": 802866015,
     "com.github.luben:zstd-jni": -851900223,
+    "com.google.auto.value:auto-value-annotations": 1653305993,
+    "com.google.code.findbugs:jsr305": 870839855,
+    "com.google.errorprone:error_prone_annotations": 833623751,
     "com.google.flatbuffers:flatbuffers-java": -566291013,
+    "com.google.guava:failureaccess": -1890754729,
+    "com.google.guava:guava": 1112630502,
+    "com.google.guava:listenablefuture": 1079558157,
+    "com.google.j2objc:j2objc-annotations": 248818742,
     "com.google.protobuf:protobuf-java": -384462041,
+    "com.google.testparameterinjector:test-parameter-injector-junit5": -2013413518,
     "com.networknt:json-schema-validator": 875845495,
     "commons-codec:commons-codec": 58403102,
     "commons-io:commons-io": -515402013,
     "io.netty:netty-buffer": -1662411192,
     "io.netty:netty-common": -1669710201,
+    "net.bytebuddy:byte-buddy": -1575917241,
     "org.apache.arrow:arrow-format": -1403751511,
     "org.apache.arrow:arrow-memory-core": -984529129,
     "org.apache.arrow:arrow-memory-netty": -921525421,
@@ -42,7 +57,20 @@
     "org.apache.kafka:kafka-clients": -270359029,
     "org.apache.kafka:kafka-streams": 24709158,
     "org.apache.kafka:kafka-streams-test-utils": 653184965,
+    "org.apiguardian:apiguardian-api": 1279798469,
+    "org.assertj:assertj-core": -313838767,
+    "org.checkerframework:checker-qual": -1533199059,
+    "org.jetbrains.kotlin:kotlin-reflect": 1016916337,
+    "org.jetbrains.kotlin:kotlin-stdlib": 689270517,
+    "org.jetbrains:annotations": 554168982,
+    "org.junit.jupiter:junit-jupiter": 1099305936,
+    "org.junit.jupiter:junit-jupiter-api": 1459221310,
+    "org.junit.jupiter:junit-jupiter-engine": 1059684571,
+    "org.junit.jupiter:junit-jupiter-params": -1156526361,
+    "org.junit.platform:junit-platform-commons": -1965907552,
     "org.junit.platform:junit-platform-console-standalone": -2037018322,
+    "org.junit.platform:junit-platform-engine": -163998054,
+    "org.opentest4j:opentest4j": -1711174392,
     "org.rocksdb:rocksdbjni": 356064214,
     "org.slf4j:slf4j-api": -1521593912,
     "org.xerial.snappy:snappy-java": -694621450,
@@ -97,17 +125,65 @@
       },
       "version": "1.5.6-10"
     },
+    "com.google.auto.value:auto-value-annotations": {
+      "shasums": {
+        "jar": "fedd59b0b4986c342f6ab2d182f2a4ee9fceb2c7e2d5bdc4dc764c92394a23d3"
+      },
+      "version": "1.7.4"
+    },
+    "com.google.code.findbugs:jsr305": {
+      "shasums": {
+        "jar": "766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7"
+      },
+      "version": "3.0.2"
+    },
+    "com.google.errorprone:error_prone_annotations": {
+      "shasums": {
+        "jar": "9e6814cb71816988a4fd1b07a993a8f21bb7058d522c162b1de849e19bea54ae"
+      },
+      "version": "2.18.0"
+    },
     "com.google.flatbuffers:flatbuffers-java": {
       "shasums": {
         "jar": "587bd6c31cda747587493a113bec8602d3a0b0ca579b2b1b838ef71b19e6525d"
       },
       "version": "25.2.10"
     },
+    "com.google.guava:failureaccess": {
+      "shasums": {
+        "jar": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26"
+      },
+      "version": "1.0.1"
+    },
+    "com.google.guava:guava": {
+      "shasums": {
+        "jar": "39f3550b0343d8d19dd4e83bd165b58ea3389d2ddb9f2148e63903f79ecdb114"
+      },
+      "version": "32.0.0-jre"
+    },
+    "com.google.guava:listenablefuture": {
+      "shasums": {
+        "jar": "b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99"
+      },
+      "version": "9999.0-empty-to-avoid-conflict-with-guava"
+    },
+    "com.google.j2objc:j2objc-annotations": {
+      "shasums": {
+        "jar": "f02a95fa1a5e95edb3ed859fd0fb7df709d121a35290eff8b74dce2ab7f4d6ed"
+      },
+      "version": "2.8"
+    },
     "com.google.protobuf:protobuf-java": {
       "shasums": {
         "jar": "cb9e00d6e3d4b1305f3fdc147490ce347bfe8c05dc821a433b23b2ff28749bb1"
       },
       "version": "4.33.5"
+    },
+    "com.google.testparameterinjector:test-parameter-injector-junit5": {
+      "shasums": {
+        "jar": "7627279d3a3586e7ee77e52b31a76ea6b7ae32a8161013ce2c4b3f2568b88416"
+      },
+      "version": "1.22"
     },
     "com.networknt:json-schema-validator": {
       "shasums": {
@@ -138,6 +214,12 @@
         "jar": "99d965d507b09599ab2d215e940c690d4f7ce8cd97ff13776aa17eb4e0d90b8a"
       },
       "version": "4.2.9.Final"
+    },
+    "net.bytebuddy:byte-buddy": {
+      "shasums": {
+        "jar": "d78396e3c5bce3f2865c9186647481e5589d34cacc632484715b686108d17c66"
+      },
+      "version": "1.18.3"
     },
     "org.apache.arrow:arrow-format": {
       "shasums": {
@@ -205,11 +287,89 @@
       },
       "version": "4.3.1"
     },
+    "org.apiguardian:apiguardian-api": {
+      "shasums": {
+        "jar": "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38"
+      },
+      "version": "1.1.2"
+    },
+    "org.assertj:assertj-core": {
+      "shasums": {
+        "jar": "c4a445426c3c2861666863b842cc4ec7bbb1c4226fefd370b6d2fe83d6c4ff0f"
+      },
+      "version": "3.27.7"
+    },
+    "org.checkerframework:checker-qual": {
+      "shasums": {
+        "jar": "e316255bbfcd9fe50d165314b85abb2b33cb2a66a93c491db648e498a82c2de1"
+      },
+      "version": "3.33.0"
+    },
+    "org.jetbrains.kotlin:kotlin-reflect": {
+      "shasums": {
+        "jar": "8209083a4a7c4e476d9842b078308fa96a96f07a6bd99f05f3586ee13289ab26"
+      },
+      "version": "2.2.20"
+    },
+    "org.jetbrains.kotlin:kotlin-stdlib": {
+      "shasums": {
+        "jar": "8836ccffd3585fadda9901244b20d42901d2f3cd581058d8434e2ffabcf3a3e7"
+      },
+      "version": "2.2.20"
+    },
+    "org.jetbrains:annotations": {
+      "shasums": {
+        "jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+      },
+      "version": "13.0"
+    },
+    "org.junit.jupiter:junit-jupiter": {
+      "shasums": {
+        "jar": "8f1049ee24b34a10b60cd810048099f781c2658cde2181e831496ab30a982985"
+      },
+      "version": "5.8.1"
+    },
+    "org.junit.jupiter:junit-jupiter-api": {
+      "shasums": {
+        "jar": "d1bb81abfd9e03418306b4e6a3390c8db52c58372e749c2980ac29f0c08278f1"
+      },
+      "version": "5.13.4"
+    },
+    "org.junit.jupiter:junit-jupiter-engine": {
+      "shasums": {
+        "jar": "027404a92fe618b72465792a257951495c503a7d5751e2791e0f51c87f67f5bc"
+      },
+      "version": "5.13.4"
+    },
+    "org.junit.jupiter:junit-jupiter-params": {
+      "shasums": {
+        "jar": "389b8d13a8d8872fcbd4f0eba7b2c46afc628419f9a1b2a3a9f93241a06a7218"
+      },
+      "version": "5.8.1"
+    },
+    "org.junit.platform:junit-platform-commons": {
+      "shasums": {
+        "jar": "1c25ca641ebaae44ff3ad21ca1b2ef68d0dd84bfeb07c4805ba7840899b77408"
+      },
+      "version": "1.13.4"
+    },
     "org.junit.platform:junit-platform-console-standalone": {
       "shasums": {
         "jar": "3fdfc37e29744a9a67dd5365e81467e26fbde0b7aa204e6f8bbe79eeaa7ae892"
       },
       "version": "1.13.4"
+    },
+    "org.junit.platform:junit-platform-engine": {
+      "shasums": {
+        "jar": "390c5f77b84283a64b644f88251b397e0b0debb80bdcc50f899881aecff43a5a"
+      },
+      "version": "1.13.4"
+    },
+    "org.opentest4j:opentest4j": {
+      "shasums": {
+        "jar": "48e2df636cab6563ced64dcdff8abb2355627cb236ef0bf37598682ddf742f1b"
+      },
+      "version": "1.3.0"
     },
     "org.rocksdb:rocksdbjni": {
       "shasums": {
@@ -250,6 +410,24 @@
       "com.fasterxml.jackson.core:jackson-annotations",
       "com.fasterxml.jackson.core:jackson-core",
       "com.fasterxml.jackson.core:jackson-databind"
+    ],
+    "com.google.guava:guava": [
+      "com.google.code.findbugs:jsr305",
+      "com.google.errorprone:error_prone_annotations",
+      "com.google.guava:failureaccess",
+      "com.google.guava:listenablefuture",
+      "com.google.j2objc:j2objc-annotations",
+      "org.checkerframework:checker-qual"
+    ],
+    "com.google.testparameterinjector:test-parameter-injector-junit5": [
+      "com.google.auto.value:auto-value-annotations",
+      "com.google.code.findbugs:jsr305",
+      "com.google.guava:guava",
+      "org.jetbrains.kotlin:kotlin-reflect",
+      "org.jetbrains.kotlin:kotlin-stdlib",
+      "org.junit.jupiter:junit-jupiter",
+      "org.junit.jupiter:junit-jupiter-engine",
+      "org.yaml:snakeyaml"
     ],
     "com.networknt:json-schema-validator": [
       "com.ethlo.time:itu",
@@ -316,6 +494,42 @@
       "org.apache.kafka:kafka-clients",
       "org.apache.kafka:kafka-streams",
       "org.slf4j:slf4j-api"
+    ],
+    "org.assertj:assertj-core": [
+      "net.bytebuddy:byte-buddy"
+    ],
+    "org.jetbrains.kotlin:kotlin-reflect": [
+      "org.jetbrains.kotlin:kotlin-stdlib"
+    ],
+    "org.jetbrains.kotlin:kotlin-stdlib": [
+      "org.jetbrains:annotations"
+    ],
+    "org.junit.jupiter:junit-jupiter": [
+      "org.junit.jupiter:junit-jupiter-api",
+      "org.junit.jupiter:junit-jupiter-engine",
+      "org.junit.jupiter:junit-jupiter-params"
+    ],
+    "org.junit.jupiter:junit-jupiter-api": [
+      "org.apiguardian:apiguardian-api",
+      "org.junit.platform:junit-platform-commons",
+      "org.opentest4j:opentest4j"
+    ],
+    "org.junit.jupiter:junit-jupiter-engine": [
+      "org.apiguardian:apiguardian-api",
+      "org.junit.jupiter:junit-jupiter-api",
+      "org.junit.platform:junit-platform-engine"
+    ],
+    "org.junit.jupiter:junit-jupiter-params": [
+      "org.apiguardian:apiguardian-api",
+      "org.junit.jupiter:junit-jupiter-api"
+    ],
+    "org.junit.platform:junit-platform-commons": [
+      "org.apiguardian:apiguardian-api"
+    ],
+    "org.junit.platform:junit-platform-engine": [
+      "org.apiguardian:apiguardian-api",
+      "org.junit.platform:junit-platform-commons",
+      "org.opentest4j:opentest4j"
     ]
   },
   "packages": {
@@ -393,13 +607,56 @@
       "com.github.luben.zstd",
       "com.github.luben.zstd.util"
     ],
+    "com.google.auto.value:auto-value-annotations": [
+      "com.google.auto.value",
+      "com.google.auto.value.extension.memoized",
+      "com.google.auto.value.extension.serializable"
+    ],
+    "com.google.code.findbugs:jsr305": [
+      "javax.annotation",
+      "javax.annotation.concurrent",
+      "javax.annotation.meta"
+    ],
+    "com.google.errorprone:error_prone_annotations": [
+      "com.google.errorprone.annotations",
+      "com.google.errorprone.annotations.concurrent"
+    ],
     "com.google.flatbuffers:flatbuffers-java": [
       "com.google.flatbuffers",
       "com.google.flatbuffers.reflection"
     ],
+    "com.google.guava:failureaccess": [
+      "com.google.common.util.concurrent.internal"
+    ],
+    "com.google.guava:guava": [
+      "com.google.common.annotations",
+      "com.google.common.base",
+      "com.google.common.base.internal",
+      "com.google.common.cache",
+      "com.google.common.collect",
+      "com.google.common.escape",
+      "com.google.common.eventbus",
+      "com.google.common.graph",
+      "com.google.common.hash",
+      "com.google.common.html",
+      "com.google.common.io",
+      "com.google.common.math",
+      "com.google.common.net",
+      "com.google.common.primitives",
+      "com.google.common.reflect",
+      "com.google.common.util.concurrent",
+      "com.google.common.xml",
+      "com.google.thirdparty.publicsuffix"
+    ],
+    "com.google.j2objc:j2objc-annotations": [
+      "com.google.j2objc.annotations"
+    ],
     "com.google.protobuf:protobuf-java": [
       "com.google.protobuf",
       "com.google.protobuf.compiler"
+    ],
+    "com.google.testparameterinjector:test-parameter-injector-junit5": [
+      "com.google.testing.junit.testparameterinjector.junit5"
     ],
     "com.networknt:json-schema-validator": [
       "com.networknt.org.apache.commons.validator.routines",
@@ -464,6 +721,48 @@
       "io.netty.util.internal.shaded.org.jctools.queues.unpadded",
       "io.netty.util.internal.shaded.org.jctools.util",
       "io.netty.util.internal.svm"
+    ],
+    "net.bytebuddy:byte-buddy": [
+      "net.bytebuddy",
+      "net.bytebuddy.agent.builder",
+      "net.bytebuddy.asm",
+      "net.bytebuddy.build",
+      "net.bytebuddy.description",
+      "net.bytebuddy.description.annotation",
+      "net.bytebuddy.description.enumeration",
+      "net.bytebuddy.description.field",
+      "net.bytebuddy.description.method",
+      "net.bytebuddy.description.modifier",
+      "net.bytebuddy.description.module",
+      "net.bytebuddy.description.type",
+      "net.bytebuddy.dynamic",
+      "net.bytebuddy.dynamic.loading",
+      "net.bytebuddy.dynamic.scaffold",
+      "net.bytebuddy.dynamic.scaffold.inline",
+      "net.bytebuddy.dynamic.scaffold.subclass",
+      "net.bytebuddy.implementation",
+      "net.bytebuddy.implementation.attribute",
+      "net.bytebuddy.implementation.auxiliary",
+      "net.bytebuddy.implementation.bind",
+      "net.bytebuddy.implementation.bind.annotation",
+      "net.bytebuddy.implementation.bytecode",
+      "net.bytebuddy.implementation.bytecode.assign",
+      "net.bytebuddy.implementation.bytecode.assign.primitive",
+      "net.bytebuddy.implementation.bytecode.assign.reference",
+      "net.bytebuddy.implementation.bytecode.collection",
+      "net.bytebuddy.implementation.bytecode.constant",
+      "net.bytebuddy.implementation.bytecode.member",
+      "net.bytebuddy.jar.asm",
+      "net.bytebuddy.jar.asm.commons",
+      "net.bytebuddy.jar.asm.signature",
+      "net.bytebuddy.jar.asmjdkbridge",
+      "net.bytebuddy.matcher",
+      "net.bytebuddy.pool",
+      "net.bytebuddy.utility",
+      "net.bytebuddy.utility.dispatcher",
+      "net.bytebuddy.utility.nullability",
+      "net.bytebuddy.utility.privilege",
+      "net.bytebuddy.utility.visitor"
     ],
     "org.apache.arrow:arrow-format": [
       "org.apache.arrow.flatbuf"
@@ -685,6 +984,248 @@
       "org.apache.kafka.streams.processor.api",
       "org.apache.kafka.streams.test"
     ],
+    "org.apiguardian:apiguardian-api": [
+      "org.apiguardian.api"
+    ],
+    "org.assertj:assertj-core": [
+      "org.assertj.core.annotation",
+      "org.assertj.core.annotations",
+      "org.assertj.core.api",
+      "org.assertj.core.api.exception",
+      "org.assertj.core.api.filter",
+      "org.assertj.core.api.iterable",
+      "org.assertj.core.api.junit.jupiter",
+      "org.assertj.core.api.recursive",
+      "org.assertj.core.api.recursive.assertion",
+      "org.assertj.core.api.recursive.comparison",
+      "org.assertj.core.condition",
+      "org.assertj.core.configuration",
+      "org.assertj.core.data",
+      "org.assertj.core.description",
+      "org.assertj.core.error",
+      "org.assertj.core.error.array2d",
+      "org.assertj.core.error.future",
+      "org.assertj.core.error.uri",
+      "org.assertj.core.extractor",
+      "org.assertj.core.groups",
+      "org.assertj.core.internal",
+      "org.assertj.core.internal.annotation",
+      "org.assertj.core.matcher",
+      "org.assertj.core.presentation",
+      "org.assertj.core.util",
+      "org.assertj.core.util.diff",
+      "org.assertj.core.util.diff.myers",
+      "org.assertj.core.util.introspection",
+      "org.assertj.core.util.xml"
+    ],
+    "org.checkerframework:checker-qual": [
+      "org.checkerframework.checker.builder.qual",
+      "org.checkerframework.checker.calledmethods.qual",
+      "org.checkerframework.checker.compilermsgs.qual",
+      "org.checkerframework.checker.fenum.qual",
+      "org.checkerframework.checker.formatter.qual",
+      "org.checkerframework.checker.guieffect.qual",
+      "org.checkerframework.checker.i18n.qual",
+      "org.checkerframework.checker.i18nformatter.qual",
+      "org.checkerframework.checker.index.qual",
+      "org.checkerframework.checker.initialization.qual",
+      "org.checkerframework.checker.interning.qual",
+      "org.checkerframework.checker.lock.qual",
+      "org.checkerframework.checker.mustcall.qual",
+      "org.checkerframework.checker.nullness.qual",
+      "org.checkerframework.checker.optional.qual",
+      "org.checkerframework.checker.propkey.qual",
+      "org.checkerframework.checker.regex.qual",
+      "org.checkerframework.checker.signature.qual",
+      "org.checkerframework.checker.signedness.qual",
+      "org.checkerframework.checker.tainting.qual",
+      "org.checkerframework.checker.units.qual",
+      "org.checkerframework.common.aliasing.qual",
+      "org.checkerframework.common.initializedfields.qual",
+      "org.checkerframework.common.reflection.qual",
+      "org.checkerframework.common.returnsreceiver.qual",
+      "org.checkerframework.common.subtyping.qual",
+      "org.checkerframework.common.util.report.qual",
+      "org.checkerframework.common.value.qual",
+      "org.checkerframework.dataflow.qual",
+      "org.checkerframework.framework.qual"
+    ],
+    "org.jetbrains.kotlin:kotlin-reflect": [
+      "kotlin.reflect.full",
+      "kotlin.reflect.jvm",
+      "kotlin.reflect.jvm.internal",
+      "kotlin.reflect.jvm.internal.calls",
+      "kotlin.reflect.jvm.internal.impl",
+      "kotlin.reflect.jvm.internal.impl.builtins",
+      "kotlin.reflect.jvm.internal.impl.builtins.functions",
+      "kotlin.reflect.jvm.internal.impl.builtins.jvm",
+      "kotlin.reflect.jvm.internal.impl.descriptors",
+      "kotlin.reflect.jvm.internal.impl.descriptors.annotations",
+      "kotlin.reflect.jvm.internal.impl.descriptors.deserialization",
+      "kotlin.reflect.jvm.internal.impl.descriptors.impl",
+      "kotlin.reflect.jvm.internal.impl.descriptors.java",
+      "kotlin.reflect.jvm.internal.impl.descriptors.runtime.components",
+      "kotlin.reflect.jvm.internal.impl.descriptors.runtime.structure",
+      "kotlin.reflect.jvm.internal.impl.incremental",
+      "kotlin.reflect.jvm.internal.impl.incremental.components",
+      "kotlin.reflect.jvm.internal.impl.km",
+      "kotlin.reflect.jvm.internal.impl.km.internal",
+      "kotlin.reflect.jvm.internal.impl.km.internal.common",
+      "kotlin.reflect.jvm.internal.impl.km.internal.extensions",
+      "kotlin.reflect.jvm.internal.impl.km.jvm",
+      "kotlin.reflect.jvm.internal.impl.km.jvm.internal",
+      "kotlin.reflect.jvm.internal.impl.load.java",
+      "kotlin.reflect.jvm.internal.impl.load.java.components",
+      "kotlin.reflect.jvm.internal.impl.load.java.descriptors",
+      "kotlin.reflect.jvm.internal.impl.load.java.lazy",
+      "kotlin.reflect.jvm.internal.impl.load.java.lazy.descriptors",
+      "kotlin.reflect.jvm.internal.impl.load.java.lazy.types",
+      "kotlin.reflect.jvm.internal.impl.load.java.sources",
+      "kotlin.reflect.jvm.internal.impl.load.java.structure",
+      "kotlin.reflect.jvm.internal.impl.load.java.typeEnhancement",
+      "kotlin.reflect.jvm.internal.impl.load.kotlin",
+      "kotlin.reflect.jvm.internal.impl.load.kotlin.header",
+      "kotlin.reflect.jvm.internal.impl.metadata",
+      "kotlin.reflect.jvm.internal.impl.metadata.builtins",
+      "kotlin.reflect.jvm.internal.impl.metadata.deserialization",
+      "kotlin.reflect.jvm.internal.impl.metadata.jvm",
+      "kotlin.reflect.jvm.internal.impl.metadata.jvm.deserialization",
+      "kotlin.reflect.jvm.internal.impl.metadata.serialization",
+      "kotlin.reflect.jvm.internal.impl.name",
+      "kotlin.reflect.jvm.internal.impl.platform",
+      "kotlin.reflect.jvm.internal.impl.protobuf",
+      "kotlin.reflect.jvm.internal.impl.renderer",
+      "kotlin.reflect.jvm.internal.impl.resolve",
+      "kotlin.reflect.jvm.internal.impl.resolve.calls.inference",
+      "kotlin.reflect.jvm.internal.impl.resolve.constants",
+      "kotlin.reflect.jvm.internal.impl.resolve.deprecation",
+      "kotlin.reflect.jvm.internal.impl.resolve.descriptorUtil",
+      "kotlin.reflect.jvm.internal.impl.resolve.jvm",
+      "kotlin.reflect.jvm.internal.impl.resolve.sam",
+      "kotlin.reflect.jvm.internal.impl.resolve.scopes",
+      "kotlin.reflect.jvm.internal.impl.resolve.scopes.receivers",
+      "kotlin.reflect.jvm.internal.impl.serialization",
+      "kotlin.reflect.jvm.internal.impl.serialization.deserialization",
+      "kotlin.reflect.jvm.internal.impl.serialization.deserialization.builtins",
+      "kotlin.reflect.jvm.internal.impl.serialization.deserialization.descriptors",
+      "kotlin.reflect.jvm.internal.impl.storage",
+      "kotlin.reflect.jvm.internal.impl.types",
+      "kotlin.reflect.jvm.internal.impl.types.checker",
+      "kotlin.reflect.jvm.internal.impl.types.error",
+      "kotlin.reflect.jvm.internal.impl.types.extensions",
+      "kotlin.reflect.jvm.internal.impl.types.model",
+      "kotlin.reflect.jvm.internal.impl.types.typeUtil",
+      "kotlin.reflect.jvm.internal.impl.types.typesApproximation",
+      "kotlin.reflect.jvm.internal.impl.util",
+      "kotlin.reflect.jvm.internal.impl.util.capitalizeDecapitalize",
+      "kotlin.reflect.jvm.internal.impl.util.collectionUtils",
+      "kotlin.reflect.jvm.internal.impl.utils",
+      "kotlin.reflect.jvm.internal.impl.utils.addToStdlib"
+    ],
+    "org.jetbrains.kotlin:kotlin-stdlib": [
+      "kotlin",
+      "kotlin.annotation",
+      "kotlin.collections",
+      "kotlin.collections.builders",
+      "kotlin.collections.jdk8",
+      "kotlin.collections.unsigned",
+      "kotlin.comparisons",
+      "kotlin.concurrent",
+      "kotlin.concurrent.atomics",
+      "kotlin.concurrent.internal",
+      "kotlin.contracts",
+      "kotlin.coroutines",
+      "kotlin.coroutines.cancellation",
+      "kotlin.coroutines.intrinsics",
+      "kotlin.coroutines.jvm.internal",
+      "kotlin.enums",
+      "kotlin.experimental",
+      "kotlin.internal",
+      "kotlin.internal.jdk7",
+      "kotlin.internal.jdk8",
+      "kotlin.io",
+      "kotlin.io.encoding",
+      "kotlin.io.path",
+      "kotlin.jdk7",
+      "kotlin.js",
+      "kotlin.jvm",
+      "kotlin.jvm.functions",
+      "kotlin.jvm.internal",
+      "kotlin.jvm.internal.markers",
+      "kotlin.jvm.internal.unsafe",
+      "kotlin.jvm.jdk8",
+      "kotlin.jvm.optionals",
+      "kotlin.math",
+      "kotlin.properties",
+      "kotlin.random",
+      "kotlin.random.jdk8",
+      "kotlin.ranges",
+      "kotlin.reflect",
+      "kotlin.sequences",
+      "kotlin.streams.jdk8",
+      "kotlin.system",
+      "kotlin.text",
+      "kotlin.text.jdk8",
+      "kotlin.time",
+      "kotlin.time.jdk8",
+      "kotlin.uuid"
+    ],
+    "org.jetbrains:annotations": [
+      "org.intellij.lang.annotations",
+      "org.jetbrains.annotations"
+    ],
+    "org.junit.jupiter:junit-jupiter-api": [
+      "org.junit.jupiter.api",
+      "org.junit.jupiter.api.condition",
+      "org.junit.jupiter.api.extension",
+      "org.junit.jupiter.api.extension.support",
+      "org.junit.jupiter.api.function",
+      "org.junit.jupiter.api.io",
+      "org.junit.jupiter.api.parallel"
+    ],
+    "org.junit.jupiter:junit-jupiter-engine": [
+      "org.junit.jupiter.engine",
+      "org.junit.jupiter.engine.config",
+      "org.junit.jupiter.engine.descriptor",
+      "org.junit.jupiter.engine.discovery",
+      "org.junit.jupiter.engine.discovery.predicates",
+      "org.junit.jupiter.engine.execution",
+      "org.junit.jupiter.engine.extension",
+      "org.junit.jupiter.engine.support"
+    ],
+    "org.junit.jupiter:junit-jupiter-params": [
+      "org.junit.jupiter.params",
+      "org.junit.jupiter.params.aggregator",
+      "org.junit.jupiter.params.converter",
+      "org.junit.jupiter.params.provider",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.annotations",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.annotations.helpers",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.beans",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.fields",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.input",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.input.concurrent",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.iterators",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.processor",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.processor.core",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.record",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.common.routine",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.conversions",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.csv",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.fixed",
+      "org.junit.jupiter.params.shadow.com.univocity.parsers.tsv",
+      "org.junit.jupiter.params.support"
+    ],
+    "org.junit.platform:junit-platform-commons": [
+      "org.junit.platform.commons",
+      "org.junit.platform.commons.annotation",
+      "org.junit.platform.commons.function",
+      "org.junit.platform.commons.logging",
+      "org.junit.platform.commons.support",
+      "org.junit.platform.commons.support.conversion",
+      "org.junit.platform.commons.support.scanning",
+      "org.junit.platform.commons.util"
+    ],
     "org.junit.platform:junit-platform-console-standalone": [
       "junit.extensions",
       "junit.framework",
@@ -805,6 +1346,20 @@
       "org.opentest4j",
       "org.opentest4j.reporting.tooling.spi.htmlreport"
     ],
+    "org.junit.platform:junit-platform-engine": [
+      "org.junit.platform.engine",
+      "org.junit.platform.engine.discovery",
+      "org.junit.platform.engine.reporting",
+      "org.junit.platform.engine.support.config",
+      "org.junit.platform.engine.support.descriptor",
+      "org.junit.platform.engine.support.discovery",
+      "org.junit.platform.engine.support.filter",
+      "org.junit.platform.engine.support.hierarchical",
+      "org.junit.platform.engine.support.store"
+    ],
+    "org.opentest4j:opentest4j": [
+      "org.opentest4j"
+    ],
     "org.rocksdb:rocksdbjni": [
       "org.rocksdb",
       "org.rocksdb.util"
@@ -856,13 +1411,22 @@
       "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml",
       "com.fasterxml.jackson.datatype:jackson-datatype-jsr310",
       "com.github.luben:zstd-jni",
+      "com.google.auto.value:auto-value-annotations",
+      "com.google.code.findbugs:jsr305",
+      "com.google.errorprone:error_prone_annotations",
       "com.google.flatbuffers:flatbuffers-java",
+      "com.google.guava:failureaccess",
+      "com.google.guava:guava",
+      "com.google.guava:listenablefuture",
+      "com.google.j2objc:j2objc-annotations",
       "com.google.protobuf:protobuf-java",
+      "com.google.testparameterinjector:test-parameter-injector-junit5",
       "com.networknt:json-schema-validator",
       "commons-codec:commons-codec",
       "commons-io:commons-io",
       "io.netty:netty-buffer",
       "io.netty:netty-common",
+      "net.bytebuddy:byte-buddy",
       "org.apache.arrow:arrow-format",
       "org.apache.arrow:arrow-memory-core",
       "org.apache.arrow:arrow-memory-netty",
@@ -874,7 +1438,20 @@
       "org.apache.kafka:kafka-clients",
       "org.apache.kafka:kafka-streams",
       "org.apache.kafka:kafka-streams-test-utils",
+      "org.apiguardian:apiguardian-api",
+      "org.assertj:assertj-core",
+      "org.checkerframework:checker-qual",
+      "org.jetbrains.kotlin:kotlin-reflect",
+      "org.jetbrains.kotlin:kotlin-stdlib",
+      "org.jetbrains:annotations",
+      "org.junit.jupiter:junit-jupiter",
+      "org.junit.jupiter:junit-jupiter-api",
+      "org.junit.jupiter:junit-jupiter-engine",
+      "org.junit.jupiter:junit-jupiter-params",
+      "org.junit.platform:junit-platform-commons",
       "org.junit.platform:junit-platform-console-standalone",
+      "org.junit.platform:junit-platform-engine",
+      "org.opentest4j:opentest4j",
       "org.rocksdb:rocksdbjni",
       "org.slf4j:slf4j-api",
       "org.xerial.snappy:snappy-java",
@@ -923,6 +1500,24 @@
         "org.apache.kafka.common.config.provider.FileConfigProvider"
       ]
     },
+    "org.jetbrains.kotlin:kotlin-reflect": {
+      "kotlin.reflect.jvm.internal.impl.builtins.BuiltInsLoader": [
+        "kotlin.reflect.jvm.internal.impl.serialization.deserialization.builtins.BuiltInsLoaderImpl"
+      ],
+      "kotlin.reflect.jvm.internal.impl.km.internal.extensions.MetadataExtensions": [
+        "kotlin.reflect.jvm.internal.impl.km.jvm.internal.JvmMetadataExtensions"
+      ],
+      "kotlin.reflect.jvm.internal.impl.resolve.ExternalOverridabilityCondition": [
+        "kotlin.reflect.jvm.internal.impl.load.java.ErasedOverridabilityCondition",
+        "kotlin.reflect.jvm.internal.impl.load.java.FieldOverridabilityCondition",
+        "kotlin.reflect.jvm.internal.impl.load.java.JavaIncompatibilityRulesOverridabilityCondition"
+      ]
+    },
+    "org.junit.jupiter:junit-jupiter-engine": {
+      "org.junit.platform.engine.TestEngine": [
+        "org.junit.jupiter.engine.JupiterTestEngine"
+      ]
+    },
     "org.junit.platform:junit-platform-console-standalone": {
       "java.util.spi.ToolProvider": [
         "org.junit.platform.console.ConsoleLauncherToolProvider"
@@ -953,6 +1548,23 @@
       ],
       "org.opentest4j.reporting.tooling.spi.htmlreport.Contributor": [
         "org.junit.platform.reporting.open.xml.JUnitContributor"
+      ]
+    },
+    "org.junit.platform:junit-platform-engine": {
+      "org.junit.platform.engine.discovery.DiscoverySelectorIdentifierParser": [
+        "org.junit.platform.engine.discovery.ClassSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.ClasspathResourceSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.ClasspathRootSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.DirectorySelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.FileSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.IterationSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.MethodSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.ModuleSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.NestedClassSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.NestedMethodSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.PackageSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.UniqueIdSelector$IdentifierParser",
+        "org.junit.platform.engine.discovery.UriSelector$IdentifierParser"
       ]
     }
   },

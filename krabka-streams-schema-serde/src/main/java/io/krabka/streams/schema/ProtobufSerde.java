@@ -4,6 +4,8 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
 import com.google.protobuf.Parser;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Objects;
 import org.apache.kafka.common.errors.SerializationException;
 
@@ -14,23 +16,39 @@ public final class ProtobufSerde<T extends Message> extends AbstractSchemaSerde<
     private final List<Integer> messageIndexes;
 
     private ProtobufSerde(T defaultInstance, SchemaCache cache, Role role) {
+        this(defaultInstance, cache, role, null);
+    }
+
+    private ProtobufSerde(
+            T defaultInstance, SchemaCache cache, Role role, SubjectNameStrategy strategy) {
         super(
                 cache,
                 role,
                 SchemaKind.PROTOBUF,
                 ProtobufSchemaPrinter.print(defaultInstance.getDescriptorForType().getFile()),
-                defaultInstance.getDescriptorForType().getFullName());
+                defaultInstance.getDescriptorForType().getFullName(),
+                strategy);
         this.defaultInstance = Objects.requireNonNull(defaultInstance, "defaultInstance");
         this.parser = parser(defaultInstance);
-        this.messageIndexes = List.of(defaultInstance.getDescriptorForType().getIndex());
+        this.messageIndexes = messageIndexes(defaultInstance.getDescriptorForType());
     }
 
     public static <T extends Message> ProtobufSerde<T> forValue(T defaultInstance, SchemaCache cache) {
         return new ProtobufSerde<>(defaultInstance, cache, Role.VALUE);
     }
 
+    public static <T extends Message> ProtobufSerde<T> forValue(
+            T defaultInstance, SchemaCache cache, SubjectNameStrategy strategy) {
+        return new ProtobufSerde<>(defaultInstance, cache, Role.VALUE, strategy);
+    }
+
     public static <T extends Message> ProtobufSerde<T> forKey(T defaultInstance, SchemaCache cache) {
         return new ProtobufSerde<>(defaultInstance, cache, Role.KEY);
+    }
+
+    public static <T extends Message> ProtobufSerde<T> forKey(
+            T defaultInstance, SchemaCache cache, SubjectNameStrategy strategy) {
+        return new ProtobufSerde<>(defaultInstance, cache, Role.KEY, strategy);
     }
 
     @Override
@@ -64,5 +82,14 @@ public final class ProtobufSerde<T extends Message> extends AbstractSchemaSerde<
     @SuppressWarnings("unchecked")
     private static <T extends Message> Parser<T> parser(T defaultInstance) {
         return (Parser<T>) defaultInstance.getParserForType();
+    }
+
+    private static List<Integer> messageIndexes(Descriptor descriptor) {
+        var indexes = new ArrayList<Integer>();
+        for (var current = descriptor; current != null; current = current.getContainingType()) {
+            indexes.add(current.getIndex());
+        }
+        Collections.reverse(indexes);
+        return List.copyOf(indexes);
     }
 }

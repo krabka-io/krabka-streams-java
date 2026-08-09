@@ -1,6 +1,6 @@
 # Feature parity
 
-Version `1.0.0` requires each row to have a Java API and a passing test.
+Version `1.1.0` requires each row to have a Java API and a passing test.
 
 | Area                                  | Java implementation                                               | Status   |
 | ------------------------------------- | ----------------------------------------------------------------- | -------- |

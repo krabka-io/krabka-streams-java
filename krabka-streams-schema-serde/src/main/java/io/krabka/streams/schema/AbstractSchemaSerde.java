@@ -13,20 +13,32 @@ abstract class AbstractSchemaSerde<T> implements Serde<T> {
     private final SchemaKind kind;
     private final String schema;
     private final String messageType;
+    private final SubjectNameStrategy subjectNameStrategy;
     private final Serializer<T> serializer = new SchemaSerializer();
     private final Deserializer<T> deserializer = new SchemaDeserializer();
 
     AbstractSchemaSerde(SchemaCache cache, Role role, SchemaKind kind, String schema, String messageType) {
+        this(cache, role, kind, schema, messageType, null);
+    }
+
+    AbstractSchemaSerde(
+            SchemaCache cache,
+            Role role,
+            SchemaKind kind,
+            String schema,
+            String messageType,
+            SubjectNameStrategy subjectNameStrategy) {
         this.cache = Objects.requireNonNull(cache, "cache");
         this.role = Objects.requireNonNull(role, "role");
         this.kind = Objects.requireNonNull(kind, "kind");
         this.schema = Objects.requireNonNull(schema, "schema");
         this.messageType = messageType;
+        this.subjectNameStrategy = subjectNameStrategy;
     }
 
     /** Adds this serde's subject to the cache prewarm set. */
     public final void registerSubject(String topic) {
-        cache.intern(cache.subject(topic, role), kind, schema, messageType);
+        cache.intern(subject(topic), kind, schema, messageType);
     }
 
     protected final SchemaCache cache() {
@@ -56,10 +68,16 @@ abstract class AbstractSchemaSerde<T> implements Serde<T> {
     }
 
     private int schemaId(String topic) {
-        var subject = cache.subject(topic, role);
+        var subject = subject(topic);
         return cache.idForSubject(subject)
                 .orElseThrow(() -> new SerializationException(
                         "schema ID for " + subject + " is not resolved; call registerSubject and prewarm first"));
+    }
+
+    private String subject(String topic) {
+        return subjectNameStrategy == null
+                ? cache.subject(topic, role)
+                : cache.subject(topic, role, subjectNameStrategy);
     }
 
     private final class SchemaSerializer implements Serializer<T> {

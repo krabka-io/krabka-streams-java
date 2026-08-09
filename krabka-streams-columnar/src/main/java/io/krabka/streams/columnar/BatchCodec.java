@@ -7,5 +7,13 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 public interface BatchCodec {
     VectorSchemaRoot decode(List<ConsumedRecord> records);
 
+    default VectorSchemaRoot decode(String topic, List<ConsumedRecord> records) {
+        return decode(records);
+    }
+
     List<ProduceRecord> encode(VectorSchemaRoot batch);
+
+    default List<ProduceRecord> encode(String topic, VectorSchemaRoot batch) {
+        return encode(batch);
+    }
 }

@@ -3,6 +3,7 @@ package io.krabka.streams.schema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.protobuf.StringValue;
 import java.net.URI;
@@ -63,10 +64,11 @@ class SchemaSerdesTest {
         var bytes = serde.serializer().serialize("orders", new Order("o-1"));
         var decoded = serde.deserializer().deserialize("orders", bytes);
 
-        assertEquals(new Order("o-1"), decoded);
+        assertThat(decoded).usingRecursiveComparison().isEqualTo(new Order("o-1"));
 
         var invalid = ConfluentWireFormat.encode(13, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertThrows(SerializationException.class, () -> serde.deserializer().deserialize("orders", invalid));
+        assertThrows(SerializationException.class, () -> serde.serializer().serialize("orders", new Order(null)));
     }
 
     @Test
@@ -78,6 +80,105 @@ class SchemaSerdesTest {
         assertNull(serde.deserializer().deserialize("orders", null));
     }
 
+    @Test
+    void serdeCanOverrideCacheSubjectStrategy() {
+        var schema = "{\"type\":\"object\"}";
+        var cache = offlineCache();
+        cache.seedSubjectId("record.Order", 14);
+        var serde = JsonSchemaSerde.forValue(
+                Order.class,
+                schema,
+                cache,
+                false,
+                com.networknt.schema.SpecificationVersion.DRAFT_7,
+                (topic, role) -> "record.Order",
+                new com.fasterxml.jackson.databind.ObjectMapper());
+
+        assertEquals(14, ConfluentWireFormat.decode(
+                serde.serializer().serialize("ignored", new Order("o-2"))).schemaId());
+    }
+
+    @Test
+    void avroReflectionRoundTripsPojo() {
+        var cache = offlineCache();
+        var serde = AvroSerde.reflect(ReflectedOrder.class, cache, Role.VALUE);
+        cache.seedSubjectId("orders-value", 15);
+        var schema = org.apache.avro.reflect.ReflectData.get().getSchema(ReflectedOrder.class);
+        cache.seedWriterSchema(15, schema.toString());
+        var value = new ReflectedOrder();
+        value.id = "o-3";
+
+        var decoded = serde.deserializer().deserialize(
+                "orders", serde.serializer().serialize("orders", value));
+
+        assertEquals("o-3", decoded.id);
+    }
+
+    @Test
+    void protobufPrintsFullDescriptorsAndFramesNestedIndexes() throws Exception {
+        var nested = com.google.protobuf.DescriptorProtos.DescriptorProto.newBuilder()
+                .setName("Nested")
+                .addField(com.google.protobuf.DescriptorProtos.FieldDescriptorProto.newBuilder()
+                        .setName("value")
+                        .setNumber(1)
+                        .setType(com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING))
+                .build();
+        var outer = com.google.protobuf.DescriptorProtos.DescriptorProto.newBuilder()
+                .setName("Outer")
+                .addNestedType(nested)
+                .addOneofDecl(com.google.protobuf.DescriptorProtos.OneofDescriptorProto.newBuilder().setName("choice"))
+                .addField(com.google.protobuf.DescriptorProtos.FieldDescriptorProto.newBuilder()
+                        .setName("name")
+                        .setNumber(1)
+                        .setType(com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
+                        .setOneofIndex(0))
+                .build();
+        var file = com.google.protobuf.DescriptorProtos.FileDescriptorProto.newBuilder()
+                .setName("demo.proto")
+                .setSyntax("proto3")
+                .setPackage("demo")
+                .setOptions(com.google.protobuf.DescriptorProtos.FileOptions.newBuilder()
+                        .setJavaPackage("demo.generated"))
+                .addEnumType(com.google.protobuf.DescriptorProtos.EnumDescriptorProto.newBuilder()
+                        .setName("Status")
+                        .addValue(com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto.newBuilder()
+                                .setName("UNKNOWN")
+                                .setNumber(0)))
+                .addMessageType(outer)
+                .addService(com.google.protobuf.DescriptorProtos.ServiceDescriptorProto.newBuilder()
+                        .setName("Demo")
+                        .addMethod(com.google.protobuf.DescriptorProtos.MethodDescriptorProto.newBuilder()
+                                .setName("Get")
+                                .setInputType(".demo.Outer")
+                                .setOutputType(".demo.Outer")))
+                .build();
+        var descriptor = com.google.protobuf.Descriptors.FileDescriptor.buildFrom(file, new com.google.protobuf.Descriptors.FileDescriptor[0]);
+        var printed = ProtobufSchemaPrinter.print(descriptor);
+        assertEquals(true, printed.contains("option java_package = \"demo.generated\";"));
+        assertEquals(true, printed.contains("message Nested"));
+        assertEquals(true, printed.contains("enum Status"));
+        assertEquals(true, printed.contains("oneof choice"));
+        assertEquals(true, printed.contains("service Demo"));
+
+        var nestedDescriptor = descriptor.findMessageTypeByName("Outer").findNestedTypeByName("Nested");
+        var defaultInstance = com.google.protobuf.DynamicMessage.getDefaultInstance(nestedDescriptor);
+        var cache = offlineCache();
+        cache.seedSubjectId("messages-value", 16);
+        var serde = ProtobufSerde.forValue(defaultInstance, cache);
+        var frame = ConfluentWireFormat.decodeProtobuf(
+                serde.serializer().serialize("messages", defaultInstance));
+        assertThat(frame.messageIndexes())
+                .usingRecursiveComparison()
+                .isEqualTo(java.util.List.of(0, 0));
+    }
+
     record Order(String id) {
+    }
+
+    public static final class ReflectedOrder {
+        public String id;
+
+        public ReflectedOrder() {
+        }
     }
 }

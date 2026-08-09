@@ -29,11 +29,12 @@ public final class ColumnarTopology {
                 null,
                 null,
                 null,
-                null));
+                null,
+                List.of()));
     }
 
     public ColumnarNode addOperator(String name, BuiltinOp operator, ColumnarNode parent) {
-        return addOperator(name, () -> operator, parent);
+        return addOperator(name, Objects.requireNonNull(operator, "operator")::fresh, parent);
     }
 
     public ColumnarNode addOperator(
@@ -47,7 +48,38 @@ public final class ColumnarTopology {
                 Objects.requireNonNull(processor, "processor"),
                 null,
                 null,
-                parent));
+                null,
+                List.of(parent)));
+    }
+
+    /** Merges batches from two or more upstream branches with the same Arrow schema. */
+    public ColumnarNode addMerge(String name, Collection<ColumnarNode> parents) {
+        var copied = List.copyOf(parents);
+        if (copied.size() < 2) {
+            throw new IllegalArgumentException("a merge needs at least two parents");
+        }
+        copied.forEach(this::requireParent);
+        return add(new NodeDefinition(name, NodeType.MERGE, List.of(), null, null, null, null, null, copied));
+    }
+
+    /** Joins two co-partitioned branches by key within an event-time window. */
+    public ColumnarNode addJoin(
+            String name, ColumnarJoin join, ColumnarNode left, ColumnarNode right) {
+        requireParent(left);
+        requireParent(right);
+        if (left.equals(right)) {
+            throw new IllegalArgumentException("a join needs two different parents");
+        }
+        return add(new NodeDefinition(
+                name,
+                NodeType.JOIN,
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                Objects.requireNonNull(join, "join"),
+                List.of(left, right)));
     }
 
     public ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent) {
@@ -60,7 +92,26 @@ public final class ColumnarTopology {
                 null,
                 Objects.requireNonNull(topic, "topic"),
                 Objects.requireNonNull(codec, "codec"),
-                parent));
+                null,
+                List.of(parent)));
+    }
+
+    /** Copies source records byte-for-byte to a topic without decoding and re-encoding the sink. */
+    public ColumnarNode addPassThroughSink(String name, String topic, ColumnarNode source) {
+        requireParent(source);
+        if (nodes.get(source.index()).type() != NodeType.SOURCE) {
+            throw new IllegalArgumentException("a pass-through sink must be attached directly to a source");
+        }
+        return add(new NodeDefinition(
+                name,
+                NodeType.SINK,
+                List.of(),
+                null,
+                null,
+                Objects.requireNonNull(topic, "topic"),
+                null,
+                null,
+                List.of(source)));
     }
 
     public List<String> sourceTopics() {
@@ -76,12 +127,14 @@ public final class ColumnarTopology {
         int sinkCount = 0;
         for (int index = 0; index < nodes.size(); index++) {
             var node = nodes.get(index);
+            int nodeIndex = index;
             if (!names.add(node.name())) {
                 throw new ColumnarException("duplicate node name `" + node.name() + "`");
             }
             if (node.type() == NodeType.SOURCE) {
                 sourceCount++;
-            } else if (node.parent() == null || node.parent().index() >= index) {
+            } else if (node.parents().isEmpty()
+                    || node.parents().stream().anyMatch(parent -> parent.index() >= nodeIndex)) {
                 throw new ColumnarException("node `" + node.name() + "` has an invalid parent");
             }
             if (node.type() == NodeType.SINK) {
@@ -128,6 +181,8 @@ public final class ColumnarTopology {
     enum NodeType {
         SOURCE,
         OPERATOR,
+        MERGE,
+        JOIN,
         SINK
     }
 
@@ -139,6 +194,7 @@ public final class ColumnarTopology {
             Supplier<? extends ColumnarProcessor> processor,
             String sinkTopic,
             BatchCodec sinkCodec,
-            ColumnarNode parent) {
+            ColumnarJoin join,
+            List<ColumnarNode> parents) {
     }
 }

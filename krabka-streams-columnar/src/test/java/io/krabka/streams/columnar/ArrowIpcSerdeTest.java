@@ -1,6 +1,7 @@
 package io.krabka.streams.columnar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.arrow.memory.RootAllocator;
@@ -16,7 +17,9 @@ class ArrowIpcSerdeTest {
             var bytes = serde.serializer().serialize("orders", batch);
 
             try (var decoded = serde.deserializer().deserialize("orders", bytes)) {
-                assertEquals(batch.getSchema(), decoded.getSchema());
+                assertThat(decoded.getSchema())
+                        .usingRecursiveComparison()
+                        .isEqualTo(batch.getSchema());
                 assertEquals(2, decoded.getRowCount());
                 assertEquals(2L, ((org.apache.arrow.vector.BigIntVector) decoded.getVector("amount")).get(1));
             }

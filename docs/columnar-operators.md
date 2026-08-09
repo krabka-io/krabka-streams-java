@@ -1,14 +1,14 @@
 # Columnar operators
 
 Operators transform one Arrow batch into zero or more Arrow batches. `BuiltinOp`
-provides four; `ColumnarProcessor` lets you write your own.
+provides five; `ColumnarProcessor` lets you write your own.
 
 ## The processor interface
 
 ```java
 @FunctionalInterface
 public interface ColumnarProcessor {
-    void process(ColumnarContext context, VectorSchemaRoot batch);
+  void process(ColumnarContext context, VectorSchemaRoot batch);
 }
 ```
 
@@ -24,8 +24,9 @@ Every factory takes the `BufferAllocator` that will own the output.
 ### filter
 
 ```java
-var large = BuiltinOp.filter(allocator, (batch, row) ->
-        ((BigIntVector) batch.getVector("amount")).get(row) > 4);
+var large =
+    BuiltinOp.filter(
+        allocator, (batch, row) -> ((BigIntVector) batch.getVector("amount")).get(row) > 4);
 ```
 
 `RowPredicate.test(VectorSchemaRoot, int)` is called once per row. Rows that pass are
@@ -46,18 +47,19 @@ Keeps the named payload columns, in the order given, then appends whichever rese
 metadata columns exist in the input. Duplicate names are ignored after the first. A
 name that is not present throws `ColumnarException("Arrow column does not exist: sku")`.
 
-Selecting one payload column from a decoded batch therefore yields five columns: the
-one you asked for plus `__key`, `__timestamp`, `__partition`, and `__offset`. You do not
-have to list metadata columns to keep them, and you cannot drop them with `select`.
+Selecting one payload column from a decoded batch therefore yields six columns: the
+one you asked for plus `__key`, `__timestamp`, `__partition`, `__offset`, and
+`__headers`. You do not have to list metadata columns to keep them.
 
 ### withColumns
 
 ```java
-var doubled = BuiltinOp.withColumns(
+var doubled =
+    BuiltinOp.withColumns(
         allocator,
         new DerivedColumn(
-                new Field("double_amount", FieldType.nullable(new ArrowType.Int(64, true)), null),
-                (batch, row) -> ((BigIntVector) batch.getVector("amount")).get(row) * 2));
+            new Field("double_amount", FieldType.nullable(new ArrowType.Int(64, true)), null),
+            (batch, row) -> ((BigIntVector) batch.getVector("amount")).get(row) * 2));
 ```
 
 Each `DerivedColumn` pairs an Arrow `Field` with a `RowValue`, a function from
@@ -71,60 +73,74 @@ Returned values are coerced to the declared Arrow type:
 | -------------------------------------- | ------------------------------------------------------ |
 | `VarChar` (`Utf8`)                     | anything; `toString()` is applied and encoded as UTF-8 |
 | `VarBinary` (`Binary`)                 | `byte[]` or `ByteBuffer`                               |
-| `BigInt`, `Int`, `SmallInt`, `TinyInt` | any `Number`, narrowed                                 |
-| `UInt1`, `UInt2`, `UInt4`, `UInt8`     | any `Number`                                           |
+| `BigInt`, `Int`, `SmallInt`, `TinyInt` | integral `Number`, checked for overflow                |
+| `UInt1`, `UInt2`, `UInt4`, `UInt8`     | non-negative integral `Number`, checked for overflow   |
 | `Float4`, `Float8`                     | any `Number`                                           |
 | `Bit` (`Bool`)                         | `Boolean`                                              |
-| anything else                          | throws `cannot write Arrow type ...`                   |
+| dates and timestamps                   | epoch `Number` or matching `java.time` value           |
+| decimal                                | `BigDecimal` or numeric text                           |
+| list and fixed-size list               | `Collection<?>`                                        |
+| struct and map                         | `Map<?, ?>`                                            |
+| sparse and dense union                 | the first member compatible with the value             |
 
 `null` writes a null into the column. Because `Utf8` accepts anything, it is the safe
 declaration for a value whose type you cannot pin down.
 
-Dates, timestamps, decimals, lists, and structs are not writable through this path. A
-derived column of those types has to be produced by a custom processor that fills the
-vector itself.
+Dictionary-encoded fields use their physical index vector, so derived values are the
+dictionary indexes. A custom processor is still appropriate when it must also mutate
+the external dictionary provider.
 
 ### groupBy
 
 ```java
-var totals = BuiltinOp.groupBy(
+var totals =
+    BuiltinOp.groupBy(
         allocator,
         List.of("user"),
         new Aggregation("amount", "total", AggregateFunction.SUM),
         new Aggregation("amount", "count", AggregateFunction.COUNT));
 ```
 
-Groups rows by the values of the key columns and applies the aggregations **within the
-current batch**. The output has one row per distinct key, ordered by first appearance,
-with the key columns first and the aggregate columns after them.
+Groups rows by the values of the key columns and retains those groups across every call
+made to the same built topology. The output is the current cumulative result, ordered
+by first appearance, with key columns first and aggregate columns after them.
 
-| Function | Output type                                                             | Semantics                                                     |
-| -------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `COUNT`  | `Int(64)`                                                               | rows in the group, nulls included                             |
-| `SUM`    | `FloatingPoint(DOUBLE)` for a floating-point input, otherwise `Int(64)` | non-numeric values are ignored; an all-null group yields null |
-| `MIN`    | the input column's type                                                 | nulls skipped; values compared with `Comparable`              |
-| `MAX`    | the input column's type                                                 | nulls skipped; values compared with `Comparable`              |
+| Function | Output type             | Semantics                                                  |
+| -------- | ----------------------- | ---------------------------------------------------------- |
+| `COUNT`  | `Int(64)`               | rows in the group, nulls included                          |
+| `SUM`    | the input column's type | exact integral accumulation; an all-null group yields null |
+| `MIN`    | the input column's type | nulls skipped; values compared with `Comparable`           |
+| `MAX`    | the input column's type | nulls skipped; values compared with `Comparable`           |
 
-An unknown key or input column throws
+Pass an `ArrowType` as the fourth `Aggregation` argument to override any output type.
+Integral narrowing and accumulation are checked and throw `ArithmeticException` on
+overflow. An unknown key or input column throws
 `ColumnarException("Arrow column does not exist: ...")`, and an empty key list throws
 `groupBy requires at least one key column`.
 
 Two consequences of the output schema are easy to miss:
 
 - Metadata columns are dropped. Unless you group by them, `__key`, `__timestamp`,
-  `__partition`, and `__offset` are gone. A downstream `BlobCodec` sink then emits a
+  `__partition`, `__offset`, and `__headers` are gone. A downstream `BlobCodec` sink then emits a
   record with timestamp `0`, and a downstream `RowCodec` sink emits records with a null
   key and timestamp `0`. Group by `__partition` or add the columns back with
   `withColumns` if you need them.
-- Aggregating within a batch is not the same as aggregating over a stream. The same key
-  in the next fetched batch starts from scratch. If you need running totals, sink the partial
-  results and combine them downstream, either in a Kafka Streams application or in a
-  second pass.
+- Rebuilding the topology creates fresh aggregate state. Keep one
+  `BuiltColumnarTopology` for the lifetime of a running partition or consumer group.
 
 Key values are read as Java objects: `Utf8` columns become `String`, binary columns
 become read-only `ByteBuffer`, numeric columns become the boxed numeric type. Grouping
-by a column whose Arrow type `setValue` cannot write back (a timestamp, for example)
-decodes fine but fails when the output row is written.
+by dates, timestamps, decimals, lists, structs, or unions writes through the same
+coercion rules as `withColumns`.
+
+### windowedGroupBy
+
+`windowedGroupBy` is the same cumulative aggregation split into fixed event-time
+windows. It reads `__timestamp` and adds `__window_start` and `__window_end` as epoch
+milliseconds. The window size must be at least one millisecond. The short overload
+retains closed windows for one window size; a second overload accepts a longer
+retention duration. Use partition snapshots when state must survive a rebalance or
+restart.
 
 ## Custom processors
 
@@ -132,28 +148,29 @@ Anything the built-ins cannot express, write directly:
 
 ```java
 final class TopN implements ColumnarProcessor {
-    private final BufferAllocator allocator;
-    private final int limit;
+  private final BufferAllocator allocator;
+  private final int limit;
 
-    @Override
-    public void process(ColumnarContext context, VectorSchemaRoot batch) {
-        var amounts = (BigIntVector) batch.getVector("amount");
-        var rows = IntStream.range(0, batch.getRowCount())
-                .boxed()
-                .sorted(Comparator.comparingLong(amounts::get).reversed())
-                .limit(limit)
-                .mapToInt(Integer::intValue)
-                .toArray();
-        context.forward(copyRows(batch, rows, allocator));   // your own copy helper
-    }
+  @Override
+  public void process(ColumnarContext context, VectorSchemaRoot batch) {
+    var amounts = (BigIntVector) batch.getVector("amount");
+    var rows =
+        IntStream.range(0, batch.getRowCount())
+            .boxed()
+            .sorted(Comparator.comparingLong(amounts::get).reversed())
+            .limit(limit)
+            .mapToInt(Integer::intValue)
+            .toArray();
+    context.forward(copyRows(batch, rows, allocator)); // your own copy helper
+  }
 }
 
 topology.addOperator("top-10", () -> new TopN(allocator, 10), source);
 ```
 
 The supplier form is the one to use for stateful processors: it is invoked once per
-node each time `runBatch` executes, so per-batch scratch state is naturally scoped and
-never leaks between batches.
+logical partition. Implement `StatefulColumnarProcessor` to participate in snapshot
+and restore.
 
 Splitting a batch is just several `forward` calls:
 
@@ -168,7 +185,7 @@ Dropping a batch is forwarding nothing:
 
 ```java
 if (batch.getRowCount() == 0) {
-    return;     // the input is closed for you
+  return; // the input is closed for you
 }
 ```
 
@@ -195,8 +212,8 @@ you close:
 
 ```java
 try (var allocator = new RootAllocator();
-        var batch = codec.decode(records)) {
-    var produced = codec.encode(batch);
+    var batch = codec.decode(records)) {
+  var produced = codec.encode(batch);
 }
 ```
 
@@ -210,7 +227,7 @@ Create one `RootAllocator` for the application and close it at shutdown:
 
 ```java
 try (var allocator = new RootAllocator()) {
-    // build codecs, operators, and the topology with this allocator
+  // build codecs, operators, and the topology with this allocator
 }
 ```
 

@@ -3,7 +3,7 @@ load("@rules_java//java:defs.bzl", "java_library", "java_test")
 java_library(
     name = "krabka-streams-test-utils",
     srcs = glob(["src/main/java/**/*.java"]),
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     visibility = ["//visibility:public"],
     deps = [
         "//krabka-streams-columnar",
@@ -21,12 +21,14 @@ java_test(
     name = "tests",
     srcs = glob(["src/test/java/**/*.java"]),
     args = ["execute", "--select-package=io.krabka.streams.test", "--fail-if-no-tests"],
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
     main_class = "org.junit.platform.console.ConsoleLauncher",
     use_testrunner = False,
     deps = [
         ":krabka-streams-test-utils",
+        "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
+        "@krabka_streams_maven//:org_assertj_assertj_core",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
     ],
 )
@@ -44,13 +46,15 @@ java_test(
         "KRABKA_INTEGRATION_BOOTSTRAP",
         "KRABKA_INTEGRATION_SCHEMA_REGISTRY",
     ],
-    javacopts = ["--release", "17"],
+    javacopts = ["--release", "17", "-parameters"],
     jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
     main_class = "org.junit.platform.console.ConsoleLauncher",
     tags = ["manual"],
     use_testrunner = False,
     deps = [
         ":krabka-streams-test-utils",
+        "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
+        "@krabka_streams_maven//:org_assertj_assertj_core",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
     ],
 )

@@ -16,6 +16,9 @@ import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.reflect.ReflectDatumReader;
+import org.apache.avro.reflect.ReflectDatumWriter;
 
 /** A Kafka serde for Confluent-framed Avro values. */
 public final class AvroSerde<T> extends AbstractSchemaSerde<T> {
@@ -28,28 +31,66 @@ public final class AvroSerde<T> extends AbstractSchemaSerde<T> {
             Role role,
             Schema readerSchema,
             Function<Schema, DatumWriter<T>> writerFactory,
-            BiFunction<Schema, Schema, DatumReader<T>> readerFactory) {
-        super(cache, role, SchemaKind.AVRO, SchemaNormalization.toParsingForm(readerSchema), null);
+            BiFunction<Schema, Schema, DatumReader<T>> readerFactory,
+            SubjectNameStrategy subjectNameStrategy) {
+        super(cache, role, SchemaKind.AVRO, SchemaNormalization.toParsingForm(readerSchema), null, subjectNameStrategy);
         this.readerSchema = readerSchema;
         this.writerFactory = writerFactory;
         this.readerFactory = readerFactory;
     }
 
     public static <T extends SpecificRecord> AvroSerde<T> forValue(Class<T> type, SchemaCache cache) {
-        return specific(type, cache, Role.VALUE);
+        return specific(type, cache, Role.VALUE, null);
+    }
+
+    public static <T extends SpecificRecord> AvroSerde<T> forValue(
+            Class<T> type, SchemaCache cache, SubjectNameStrategy strategy) {
+        return specific(type, cache, Role.VALUE, strategy);
     }
 
     public static <T extends SpecificRecord> AvroSerde<T> forKey(Class<T> type, SchemaCache cache) {
-        return specific(type, cache, Role.KEY);
+        return specific(type, cache, Role.KEY, null);
+    }
+
+    public static <T extends SpecificRecord> AvroSerde<T> forKey(
+            Class<T> type, SchemaCache cache, SubjectNameStrategy strategy) {
+        return specific(type, cache, Role.KEY, strategy);
     }
 
     public static AvroSerde<GenericRecord> generic(Schema schema, SchemaCache cache, Role role) {
-        return new AvroSerde<>(cache, role, schema, GenericDatumWriter::new, GenericDatumReader::new);
+        return generic(schema, cache, role, null);
     }
 
-    private static <T extends SpecificRecord> AvroSerde<T> specific(Class<T> type, SchemaCache cache, Role role) {
+    public static AvroSerde<GenericRecord> generic(
+            Schema schema, SchemaCache cache, Role role, SubjectNameStrategy strategy) {
+        return new AvroSerde<>(
+                cache, role, schema, GenericDatumWriter::new, GenericDatumReader::new, strategy);
+    }
+
+    /** Creates a serde backed by Avro reflection for ordinary Java classes. */
+    public static <T> AvroSerde<T> reflect(
+            Class<T> type, SchemaCache cache, Role role) {
+        return reflect(type, cache, role, null);
+    }
+
+    public static <T> AvroSerde<T> reflect(
+            Class<T> type, SchemaCache cache, Role role, SubjectNameStrategy strategy) {
+        var reflectData = ReflectData.get();
+        var schema = reflectData.getSchema(type);
+        return new AvroSerde<>(
+                cache,
+                role,
+                schema,
+                writer -> new ReflectDatumWriter<>(writer, reflectData),
+                (writer, reader) -> new ReflectDatumReader<>(writer, reader, reflectData),
+                strategy);
+    }
+
+    private static <T extends SpecificRecord> AvroSerde<T> specific(
+            Class<T> type, SchemaCache cache, Role role, SubjectNameStrategy strategy) {
         var schema = SpecificData.get().getSchema(type);
-        return new AvroSerde<>(cache, role, schema, SpecificDatumWriter::new, SpecificDatumReader::new);
+        return new AvroSerde<>(
+                cache, role, schema, SpecificDatumWriter::new, SpecificDatumReader::new, strategy);
     }
 
     @Override
@@ -63,7 +104,9 @@ public final class AvroSerde<T> extends AbstractSchemaSerde<T> {
 
     @Override
     protected T deserializeBody(int schemaId, byte[] body) throws Exception {
-        var writerSchema = new Schema.Parser().parse(cache().writerSchema(schemaId));
+        var parser = new Schema.Parser();
+        cache().writerReferences(schemaId).values().forEach(parser::parse);
+        var writerSchema = parser.parse(cache().writerSchema(schemaId));
         var decoder = DecoderFactory.get().binaryDecoder(body, null);
         return readerFactory.apply(writerSchema, readerSchema).read(null, decoder);
     }

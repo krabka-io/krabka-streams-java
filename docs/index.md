@@ -1,6 +1,6 @@
 # krabka streams for Java documentation
 
-This directory documents `krabka-streams-java` version `1.0.0`.
+This directory documents `krabka-streams-java` version `1.1.0`.
 
 ## Guides
 
@@ -15,7 +15,7 @@ This directory documents `krabka-streams-java` version `1.0.0`.
 | [Testing](testing.md)                       | `ColumnarTestDriver`, `SchemaRegistryStub`, and the integration suite |
 | [API reference](api-reference.md)           | Every public type, grouped by module                                  |
 | [Architecture](architecture.md)             | Module layout, data flow, and design decisions                        |
-| [Limitations](limitations.md)               | What `1.0.0` does not do                                              |
+| [Runtime constraints](limitations.md)       | Broker, JVM, Arrow, and packaging constraints                         |
 | [Troubleshooting](troubleshooting.md)       | Error messages mapped to causes and fixes                             |
 | [Build and release](build-and-release.md)   | Gradle tasks, CI workflows, and publishing                            |
 

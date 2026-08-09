@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -17,6 +18,7 @@ public final class SchemaCache {
     private final ConcurrentMap<String, Integer> subjectIds = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, String> writerSchemas = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, String> writerMessageTypes = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Integer, Map<String, String>> writerReferences = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, CompletableFuture<?>> fetching = new ConcurrentHashMap<>();
 
     public SchemaCache(KrabkaSchemaRegistryClient client) {
@@ -36,6 +38,10 @@ public final class SchemaCache {
         return subjectNameStrategy.subject(topic, role);
     }
 
+    public String subject(String topic, Role role, SubjectNameStrategy strategy) {
+        return Objects.requireNonNull(strategy, "strategy").subject(topic, role);
+    }
+
     /** Adds a local schema to the next prewarm operation. This operation is idempotent by subject. */
     public void intern(String subject, SchemaKind kind, String schema, String messageType) {
         interned.putIfAbsent(
@@ -48,6 +54,25 @@ public final class SchemaCache {
         var futures = new ArrayList<CompletableFuture<Void>>(interned.size());
         interned.forEach((subject, local) -> futures.add(resolve(subject, local)));
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
+    }
+
+    /** Resolves every interned subject and reports successes and failures independently. */
+    public CompletableFuture<PrewarmReport> prewarmReport() {
+        var resolved = new ConcurrentHashMap<String, Integer>();
+        var failures = new ConcurrentHashMap<String, Throwable>();
+        var futures = new ArrayList<CompletableFuture<Void>>(interned.size());
+        interned.forEach((subject, local) -> futures.add(resolve(subject, local).handle((ignored, error) -> {
+            if (error == null) {
+                resolved.put(subject, subjectIds.get(subject));
+            } else {
+                failures.put(subject, error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                        ? error.getCause()
+                        : error);
+            }
+            return null;
+        })));
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                .thenApply(ignored -> new PrewarmReport(resolved, failures));
     }
 
     public OptionalInt idForSubject(String subject) {
@@ -69,6 +94,10 @@ public final class SchemaCache {
 
     public String writerMessageType(int schemaId) {
         return writerMessageTypes.get(schemaId);
+    }
+
+    public Map<String, String> writerReferences(int schemaId) {
+        return writerReferences.getOrDefault(schemaId, Map.of());
     }
 
     /** Adds a subject ID directly. This method supports deterministic tests and offline startup. */
@@ -111,12 +140,13 @@ public final class SchemaCache {
         if (fetching.putIfAbsent(schemaId, marker) != null) {
             return;
         }
-        client.schemaById(schemaId).whenComplete((fetched, error) -> {
+        client.resolvedSchemaById(schemaId).whenComplete((fetched, error) -> {
             if (error == null) {
                 writerSchemas.put(schemaId, fetched.schema());
                 if (fetched.messageType() != null) {
                     writerMessageTypes.put(schemaId, fetched.messageType());
                 }
+                writerReferences.put(schemaId, fetched.references());
                 marker.complete(null);
             } else {
                 marker.completeExceptionally(error);
@@ -132,5 +162,16 @@ public final class SchemaCache {
     }
 
     private record Resolution(int id, String messageType) {
+    }
+
+    public record PrewarmReport(Map<String, Integer> resolved, Map<String, Throwable> failures) {
+        public PrewarmReport {
+            resolved = Map.copyOf(resolved);
+            failures = Map.copyOf(failures);
+        }
+
+        public boolean successful() {
+            return failures.isEmpty();
+        }
     }
 }

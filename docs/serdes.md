@@ -9,8 +9,8 @@ package-private `AbstractSchemaSerde`.
 
 ```java
 var serde = AvroSerde.generic(schema, cache, Role.VALUE);
-serde.registerSubject("orders");   // intern the subject for prewarming
-cache.prewarm().join();            // resolve the subject to a schema ID
+serde.registerSubject("orders"); // intern the subject for prewarming
+cache.prewarm().join(); // resolve the subject to a schema ID
 byte[] bytes = serde.serializer().serialize("orders", record);
 GenericRecord back = serde.deserializer().deserialize("orders", bytes);
 ```
@@ -68,8 +68,8 @@ Standard frame (Avro and JSON Schema):
 byte[] frame = ConfluentWireFormat.encode(258, body);
 // -> 00 00 00 01 02 <body>
 ConfluentWireFormat.Frame decoded = ConfluentWireFormat.decode(frame);
-decoded.schemaId();   // 258
-decoded.body();       // a defensive copy
+decoded.schemaId(); // 258
+decoded.body(); // a defensive copy
 ```
 
 Protobuf frames add a message-index path between the header and the body, encoded as
@@ -79,7 +79,7 @@ zig-zag varints:
 byte[] frame = ConfluentWireFormat.encodeProtobuf(7, List.of(0), body);
 // -> 00 00 00 00 07 00 <body>   (the single 0x00 is the shorthand for "first message")
 var protobuf = ConfluentWireFormat.decodeProtobuf(frame);
-protobuf.messageIndexes();   // List.of(0)
+protobuf.messageIndexes(); // List.of(0)
 ```
 
 An index path of exactly `[0]` is written as a single zero byte, matching the Confluent
@@ -136,8 +136,11 @@ var bytes = serde.serializer().serialize("orders", order);
 assert serde.deserializer().deserialize("orders", bytes).get("id").toString().equals("o-1");
 ```
 
-Reflection-based Avro (`ReflectDatumWriter`) is not wired up. Use `SpecificRecord`
-classes or `GenericRecord`.
+Ordinary Java classes use Avro reflection:
+
+```java
+var reflected = AvroSerde.reflect(Order.class, cache, Role.VALUE);
+```
 
 ## ProtobufSerde
 
@@ -150,8 +153,7 @@ The serde derives three things from the default instance:
 
 - the schema text, printed from the message's `FileDescriptor`;
 - the `messageType`, which is the fully qualified message name;
-- the message-index path, `[descriptor.getIndex()]`, which is the position of the
-  message within its `.proto` file.
+- the full message-index path from the top-level parent to a nested message.
 
 Bodies are `Message.toByteArray()` and are parsed with the message's own `Parser`.
 
@@ -164,53 +166,53 @@ Protobuf messageType mismatch: writer demo.Other, local google.protobuf.StringVa
 
 That check is skipped when the registry supplied no `messageType`.
 
-### Schema printing limitations
-
-`ProtobufSchemaPrinter` emits a readable, registerable `.proto` document, but it is
-deliberately small. It writes the syntax line, the package, and every **top-level**
-message with its fields, including `repeated` fields, `map` fields, and proto2
-`required`/`optional` labels. It refers to nested messages and enums by fully qualified
-name.
-
-It does **not** emit nested message definitions, enum definitions, `oneof` blocks,
-services, imports, options, or extensions, and it throws
-`IllegalArgumentException("unsupported Protobuf field type ...")` for group fields.
-
-Two consequences:
-
-- A registry that validates schema syntax may reject a printed schema whose referenced
-  enums or nested types are not defined in the same document.
-- The message-index path assumes a top-level message. A nested message needs the full
-  path (`[parentIndex, childIndex]`), which the serde does not compute.
-
-If either matters for your schemas, register the real `.proto` text yourself with
-`KrabkaSchemaRegistryClient.register` and pin the ID with `cache.seedSubjectId`.
+`ProtobufSchemaPrinter` reconstructs imports, options, nested definitions, enums,
+`oneof`, services, extensions, maps, and proto2 groups from the generated descriptor.
+Schema references can also be supplied to `register` and are recursively resolved when
+reading.
 
 ## JsonSchemaSerde
 
 ```java
 JsonSchemaSerde<Order> values = JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true);
 JsonSchemaSerde<Order> keys = JsonSchemaSerde.forKey(Order.class, schemaJson, cache, true);
-JsonSchemaSerde<Order> custom = JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true, objectMapper);
+JsonSchemaSerde<Order> custom =
+    JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true, objectMapper);
 ```
 
-The `validate` flag controls **deserialization only**. When it is `true`, the incoming
-body is validated before Jackson binds it, against the _writer's_ schema: the one
-fetched for the frame's schema ID. A failure throws
+The `validate` flag checks serialization against the local schema and deserialization
+against the fetched writer schema. A failure throws
 
 ```text
 JSON Schema validation failed: <first message from the validator>
 ```
 
-Validation uses `com.networknt:json-schema-validator` with the Draft 2020-12 dialect.
-Compiled validators are cached per schema ID, so the cost is paid once. Serialization
-is never validated; it is a plain `ObjectMapper.writeValueAsBytes`.
+The serde detects Draft 4, 6, 7, 2019-09, or 2020-12 from `$schema`; schemas without it
+default to 2020-12. An extended factory can set the dialect, subject strategy, and
+`ObjectMapper` explicitly. Compiled validators are cached per schema ID.
 
 The fourth factory takes an `ObjectMapper`, which is how you register modules
 (`JavaTimeModule`), change naming strategies, or relax `FAIL_ON_UNKNOWN_PROPERTIES`.
 A custom mapper is available for values only; keys use the default mapper.
 
 ## Choosing between them
+
+### Local compatibility before registration
+
+`LocalSchemaCompatibility` checks a previous and candidate schema without contacting a
+registry. Choose `BACKWARD`, `FORWARD`, or `FULL`:
+
+```java
+var result = LocalSchemaCompatibility.avro(previous, candidate, Mode.BACKWARD);
+if (!result.compatible()) {
+  throw new IllegalArgumentException(result.incompatibilities().toString());
+}
+```
+
+Avro delegates to Avro's reader/writer compatibility checker. JSON Schema checks type
+narrowing, required fields, and closed object properties. Protobuf compares
+`FileDescriptor` message fields by wire type,
+cardinality, and required-field presence.
 
 |                                | Avro                          | Protobuf                  | JSON Schema          |
 | ------------------------------ | ----------------------------- | ------------------------- | -------------------- |
@@ -232,27 +234,34 @@ pieces:
 
 ```java
 final class CborSerde<T> implements Serde<T> {
-    private final SchemaCache cache;
-    private final String subject;
+  private final SchemaCache cache;
+  private final String subject;
 
-    @Override
-    public Serializer<T> serializer() {
-        return (topic, value) -> value == null ? null : ConfluentWireFormat.encode(
-                cache.idForSubject(subject).orElseThrow(() ->
-                        new SerializationException("schema ID for " + subject + " is not resolved")),
+  @Override
+  public Serializer<T> serializer() {
+    return (topic, value) ->
+        value == null
+            ? null
+            : ConfluentWireFormat.encode(
+                cache
+                    .idForSubject(subject)
+                    .orElseThrow(
+                        () ->
+                            new SerializationException(
+                                "schema ID for " + subject + " is not resolved")),
                 encodeCbor(value));
-    }
+  }
 
-    @Override
-    public Deserializer<T> deserializer() {
-        return (topic, bytes) -> {
-            if (bytes == null) {
-                return null;
-            }
-            var frame = ConfluentWireFormat.decode(bytes);
-            return decodeCbor(cache.writerSchema(frame.schemaId()), frame.body());
-        };
-    }
+  @Override
+  public Deserializer<T> deserializer() {
+    return (topic, bytes) -> {
+      if (bytes == null) {
+        return null;
+      }
+      var frame = ConfluentWireFormat.decode(bytes);
+      return decodeCbor(cache.writerSchema(frame.schemaId()), frame.body());
+    };
+  }
 }
 ```
 
