@@ -7,5 +7,5 @@ dependencies {
     api("org.apache.avro:avro:1.12.1")
     api("com.google.protobuf:protobuf-java:4.33.5")
     api("com.fasterxml.jackson.core:jackson-databind:2.22.0")
-    implementation("com.networknt:json-schema-validator:2.0.4")
+    api("com.networknt:json-schema-validator:2.0.4")
 }

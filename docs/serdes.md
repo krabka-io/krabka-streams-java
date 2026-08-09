@@ -136,8 +136,11 @@ var bytes = serde.serializer().serialize("orders", order);
 assert serde.deserializer().deserialize("orders", bytes).get("id").toString().equals("o-1");
 ```
 
-Reflection-based Avro (`ReflectDatumWriter`) is not wired up. Use `SpecificRecord`
-classes or `GenericRecord`.
+Ordinary Java classes use Avro reflection:
+
+```java
+var reflected = AvroSerde.reflect(Order.class, cache, Role.VALUE);
+```
 
 ## ProtobufSerde
 
@@ -150,8 +153,7 @@ The serde derives three things from the default instance:
 
 - the schema text, printed from the message's `FileDescriptor`;
 - the `messageType`, which is the fully qualified message name;
-- the message-index path, `[descriptor.getIndex()]`, which is the position of the
-  message within its `.proto` file.
+- the full message-index path from the top-level parent to a nested message.
 
 Bodies are `Message.toByteArray()` and are parsed with the message's own `Parser`.
 
@@ -164,27 +166,10 @@ Protobuf messageType mismatch: writer demo.Other, local google.protobuf.StringVa
 
 That check is skipped when the registry supplied no `messageType`.
 
-### Schema printing limitations
-
-`ProtobufSchemaPrinter` emits a readable, registerable `.proto` document, but it is
-deliberately small. It writes the syntax line, the package, and every **top-level**
-message with its fields, including `repeated` fields, `map` fields, and proto2
-`required`/`optional` labels. It refers to nested messages and enums by fully qualified
-name.
-
-It does **not** emit nested message definitions, enum definitions, `oneof` blocks,
-services, imports, options, or extensions, and it throws
-`IllegalArgumentException("unsupported Protobuf field type ...")` for group fields.
-
-Two consequences:
-
-- A registry that validates schema syntax may reject a printed schema whose referenced
-  enums or nested types are not defined in the same document.
-- The message-index path assumes a top-level message. A nested message needs the full
-  path (`[parentIndex, childIndex]`), which the serde does not compute.
-
-If either matters for your schemas, register the real `.proto` text yourself with
-`KrabkaSchemaRegistryClient.register` and pin the ID with `cache.seedSubjectId`.
+`ProtobufSchemaPrinter` reconstructs imports, options, nested definitions, enums,
+`oneof`, services, extensions, maps, and proto2 groups from the generated descriptor.
+Schema references can also be supplied to `register` and are recursively resolved when
+reading.
 
 ## JsonSchemaSerde
 
@@ -194,17 +179,16 @@ JsonSchemaSerde<Order> keys = JsonSchemaSerde.forKey(Order.class, schemaJson, ca
 JsonSchemaSerde<Order> custom = JsonSchemaSerde.forValue(Order.class, schemaJson, cache, true, objectMapper);
 ```
 
-The `validate` flag controls **deserialization only**. When it is `true`, the incoming
-body is validated before Jackson binds it, against the _writer's_ schema: the one
-fetched for the frame's schema ID. A failure throws
+The `validate` flag checks serialization against the local schema and deserialization
+against the fetched writer schema. A failure throws
 
 ```text
 JSON Schema validation failed: <first message from the validator>
 ```
 
-Validation uses `com.networknt:json-schema-validator` with the Draft 2020-12 dialect.
-Compiled validators are cached per schema ID, so the cost is paid once. Serialization
-is never validated; it is a plain `ObjectMapper.writeValueAsBytes`.
+The serde detects Draft 4, 6, 7, 2019-09, or 2020-12 from `$schema`; schemas without it
+default to 2020-12. An extended factory can set the dialect, subject strategy, and
+`ObjectMapper` explicitly. Compiled validators are cached per schema ID.
 
 The fourth factory takes an `ObjectMapper`, which is how you register modules
 (`JavaTimeModule`), change naming strategies, or relax `FAIL_ON_UNKNOWN_PROPERTIES`.

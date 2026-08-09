@@ -18,6 +18,7 @@ java_library(
         "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_core",
         "@krabka_streams_maven//:com_fasterxml_jackson_core_jackson_databind",
         "@krabka_streams_maven//:com_google_protobuf_protobuf_java",
+        "@krabka_streams_maven//:com_networknt_json_schema_validator",
         "@krabka_streams_maven//:org_apache_avro_avro",
     ],
 )

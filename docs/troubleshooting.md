@@ -41,8 +41,8 @@ The serializer found no ID for the subject. Causes, in order of likelihood:
 3. `prewarm()` failed; the future completed exceptionally and nothing checked it.
 4. The topic at run time differs from the one passed to `registerSubject`, so the
    computed subject differs.
-5. A `RowCodec` is calling the serde with an empty topic name, so the subject is
-   `-value`. See [Limitations](limitations.md#rowcodec-passes-an-empty-topic-name-to-serdes).
+5. The source or sink topic passed through `RowCodec` differs from the topic registered
+   during prewarm.
 
 ```java
 serde.registerSubject("orders");
@@ -72,8 +72,8 @@ still matches, while any structural difference does not.
 ### `schema registry returned HTTP 409`
 
 The registry rejected the schema as incompatible with the subject's existing versions.
-Fix the schema or the subject's compatibility level; this library does not manage
-compatibility settings.
+Fix the schema or set the subject's compatibility level with
+`client.setCompatibility(subject, level)`.
 
 ### `schema registry request failed`, `statusCode() == -1`
 
@@ -81,8 +81,7 @@ A transport failure: unreachable host, TLS failure, or timeout. The cause carrie
 underlying `IOException`. Configure timeouts and TLS on the `HttpClient` passed to the
 three-argument constructor.
 
-If the base URI includes a context path, that path is dropped. Point the client at the
-registry root.
+Context paths in the base URI are preserved.
 
 ### `serde role does not match the Kafka key setting`
 
@@ -99,9 +98,9 @@ at the first record.
 
 ### `JSON Schema validation failed: ...`
 
-The record body does not satisfy the _writer's_ schema. Serialization is never
-validated, so an upstream producer can emit a document that violates its own registered
-schema. Set `validate = false` to accept it, or fix the producer.
+The record body does not satisfy its schema. Validation applies on serialization
+against the local schema and on deserialization against the writer schema. Set
+`validate = false` to accept it, or fix the producer.
 
 ### `cannot serialize schema value` / `cannot deserialize schema value`
 
@@ -128,16 +127,17 @@ transit. Confirm the topic really carries Protobuf and that `ProtobufSerde` (not
 
 ## Columnar
 
-### ``payload column `__key` collides with a reserved metadata column``
+### A payload column starts with `__payload_`
 
-Your Arrow payload uses one of the four reserved names. Rename the payload column; the
-reserved names cannot be shadowed.
+The original name collided with a metadata column. Use
+`BlobCodec.payloadColumn(originalName)` while processing it. Sinks restore the original
+name automatically.
 
 ### `Arrow batch schemas differ`
 
 `BlobCodec.decode` received records whose Arrow payloads have different schemas. All
-records in one fetched batch must share a schema. Watch for `JsonRowBridge` inferring a
-different type upstream when the first non-null sample changes.
+records in one fetched batch must share a schema. Reuse one `JsonRowBridge`, or pass an
+explicit Arrow `Schema`, to keep row batches stable.
 
 ### `decode called with an empty record batch`
 
@@ -156,11 +156,10 @@ that `groupBy` drops metadata columns and replaces payload columns with the key 
 aggregate columns, so a downstream operator may be looking at a narrower schema than you
 expect.
 
-### `cannot write Arrow type Timestamp(MILLISECOND, null)`
+### `no Arrow union member accepts ...`
 
-`withColumns` or `groupBy` tried to write a type outside the supported coercion table.
-Carry the value as UTF-8 text, or fill the vector in a custom processor. See
-[Limitations](limitations.md#writable-arrow-types-are-limited).
+A `withColumns` or `groupBy` value matches none of the declared union children. Return
+a value compatible with one child or widen the union field.
 
 ### `groupBy requires at least one key column`
 
@@ -206,14 +205,15 @@ always produces a null key by design, because it emits batches rather than keyed
 
 ### The broker rejects a produced record as too large
 
-`BlobCodec` splits at a 900 KiB soft cap by default, but a single row larger than the cap
-cannot be split further. Lower `maxRecordBytes`, raise the broker's `max.message.bytes`,
-or reduce row size.
+`BlobCodec` enforces a 900 KiB hard cap by default and rejects a single row that cannot
+fit. Raise both `maxRecordBytes` and the broker's `max.message.bytes`, or reduce row
+size.
 
 ### Offsets never advance
 
-`ColumnarRunner.runPartitionOnce` returns the next offset and commits nothing. Store the
-returned value and pass it back on the next call.
+Check that the poll returned records and that `commitSync` succeeded. Group runners
+commit every processed partition after producer flush; transactional runners commit
+offsets through the producer transaction.
 
 ## Build
 

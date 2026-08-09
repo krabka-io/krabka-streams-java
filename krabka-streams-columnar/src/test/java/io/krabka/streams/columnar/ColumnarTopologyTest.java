@@ -60,4 +60,32 @@ class ColumnarTopologyTest {
                     () -> topology.addSink("foreign-sink", "out", new BlobCodec(allocator), foreignSource));
         }
     }
+
+    @Test
+    void mergesBranchesAndPassesSourceBytesThrough() {
+        try (var allocator = new RootAllocator();
+                var payload = ArrowTestData.transactions(allocator, new String[] {"a"}, new long[] {1})) {
+            var codec = new BlobCodec(allocator);
+            var topology = new ColumnarTopology(allocator);
+            var left = topology.addSource("left", List.of("in-left"), codec);
+            var right = topology.addSource("right", List.of("in-right"), codec);
+            var merged = topology.addMerge("merge", List.of(left, right));
+            topology.addSink("sink", "out", codec, merged);
+            var bytes = new ArrowIpcSerde(allocator).serialize(payload);
+            var output = topology.build().runBatches(java.util.Map.of(
+                    "in-left", List.of(new ConsumedRecord(null, bytes, 1, 0, 0)),
+                    "in-right", List.of(new ConsumedRecord(null, bytes, 1, 0, 0))));
+            try (var result = new ArrowIpcSerde(allocator).deserialize(output.get(0).record().value())) {
+                assertEquals(2, result.getRowCount());
+            }
+
+            var passthrough = new ColumnarTopology(allocator);
+            var raw = passthrough.addSource("raw", List.of("raw-in"), codec);
+            passthrough.addPassThroughSink("copy", "raw-out", raw);
+            var malformed = new byte[] {1, 2, 3};
+            var copied = passthrough.build().runBatch(
+                    "raw-in", List.of(new ConsumedRecord(null, malformed, 4, 0, 0)));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(malformed, copied.get(0).record().value());
+        }
+    }
 }

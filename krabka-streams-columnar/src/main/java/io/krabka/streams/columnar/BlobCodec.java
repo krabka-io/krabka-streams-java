@@ -15,6 +15,11 @@ public final class BlobCodec implements BatchCodec {
     public static final String PARTITION_COLUMN = ArrowBatchSupport.PARTITION;
     public static final String OFFSET_COLUMN = ArrowBatchSupport.OFFSET;
 
+    /** Returns the in-batch name used when a payload column collides with metadata. */
+    public static String payloadColumn(String name) {
+        return ArrowBatchSupport.payloadColumn(name);
+    }
+
     private final BufferAllocator allocator;
     private final ArrowIpcSerde serde;
     private final int maxRecordBytes;
@@ -63,24 +68,37 @@ public final class BlobCodec implements BatchCodec {
         long timestamp = lastTimestamp(batch);
         try (var payload = ArrowBatchSupport.payload(batch, allocator)) {
             var result = new ArrayList<ProduceRecord>();
-            encodeChunks(payload, timestamp, result);
+            int start = 0;
+            while (start < payload.getRowCount()) {
+                var chunk = largestChunk(payload, start);
+                result.add(new ProduceRecord(null, chunk.bytes(), timestamp));
+                start += chunk.rows();
+            }
             return List.copyOf(result);
         }
     }
 
-    private void encodeChunks(VectorSchemaRoot batch, long timestamp, List<ProduceRecord> output) {
-        var bytes = serde.serialize(batch);
-        if (bytes.length <= maxRecordBytes || batch.getRowCount() <= 1) {
-            output.add(new ProduceRecord(null, bytes, timestamp));
-            return;
+    private EncodedChunk largestChunk(VectorSchemaRoot batch, int start) {
+        int low = 1;
+        int high = batch.getRowCount() - start;
+        EncodedChunk best = null;
+        while (low <= high) {
+            int rows = low + (high - low) / 2;
+            byte[] bytes;
+            try (var candidate = ArrowBatchSupport.copyRange(batch, start, rows, allocator)) {
+                bytes = serde.serialize(candidate);
+            }
+            if (bytes.length <= maxRecordBytes) {
+                best = new EncodedChunk(rows, bytes);
+                low = rows + 1;
+            } else {
+                high = rows - 1;
+            }
         }
-        int midpoint = batch.getRowCount() / 2;
-        try (var left = ArrowBatchSupport.copyRange(batch, 0, midpoint, allocator);
-                var right = ArrowBatchSupport.copyRange(
-                        batch, midpoint, batch.getRowCount() - midpoint, allocator)) {
-            encodeChunks(left, timestamp, output);
-            encodeChunks(right, timestamp, output);
+        if (best == null) {
+            throw new ColumnarException("one Arrow row exceeds maxRecordBytes=" + maxRecordBytes);
         }
+        return best;
     }
 
     private static long lastTimestamp(VectorSchemaRoot batch) {
@@ -90,5 +108,8 @@ public final class BlobCodec implements BatchCodec {
         }
         int row = batch.getRowCount() - 1;
         return timestamps.isNull(row) ? 0 : timestamps.get(row);
+    }
+
+    private record EncodedChunk(int rows, byte[] bytes) {
     }
 }

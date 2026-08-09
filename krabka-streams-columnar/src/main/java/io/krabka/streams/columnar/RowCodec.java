@@ -24,10 +24,15 @@ public final class RowCodec<T> implements BatchCodec {
 
     @Override
     public VectorSchemaRoot decode(List<ConsumedRecord> records) {
+        return decode("", records);
+    }
+
+    @Override
+    public VectorSchemaRoot decode(String topic, List<ConsumedRecord> records) {
         var values = new ArrayList<T>(records.size());
         var metadata = new ArrayList<ArrowBatchSupport.RowMetadata>(records.size());
         for (var record : records) {
-            values.add(valueSerde.deserializer().deserialize("", record.value()));
+            values.add(valueSerde.deserializer().deserialize(topic, record.value()));
             metadata.add(new ArrowBatchSupport.RowMetadata(
                     record.key(), record.timestamp(), record.partition(), record.offset()));
         }
@@ -38,6 +43,11 @@ public final class RowCodec<T> implements BatchCodec {
 
     @Override
     public List<ProduceRecord> encode(VectorSchemaRoot batch) {
+        return encode("", batch);
+    }
+
+    @Override
+    public List<ProduceRecord> encode(String topic, VectorSchemaRoot batch) {
         try (var payload = ArrowBatchSupport.payload(batch, allocator)) {
             var rows = rowBridge.batchToRows(payload);
             var output = new ArrayList<ProduceRecord>(rows.size());
@@ -46,7 +56,7 @@ public final class RowCodec<T> implements BatchCodec {
             for (int row = 0; row < rows.size(); row++) {
                 output.add(new ProduceRecord(
                         key(keys, row),
-                        valueSerde.serializer().serialize("", rows.get(row)),
+                        valueSerde.serializer().serialize(topic, rows.get(row)),
                         timestamp(timestamps, row)));
             }
             return List.copyOf(output);

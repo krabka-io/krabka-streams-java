@@ -11,12 +11,24 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 /** A validated and reusable columnar topology. */
 public final class BuiltColumnarTopology {
     private final ColumnarTopology topology;
+    private final Map<Integer, ColumnarProcessor> processors = new HashMap<>();
 
     BuiltColumnarTopology(ColumnarTopology topology) {
         this.topology = topology;
+        var nodes = topology.nodes();
+        for (int index = 0; index < nodes.size(); index++) {
+            if (nodes.get(index).type() == ColumnarTopology.NodeType.OPERATOR) {
+                processors.put(index, nodes.get(index).processor().get());
+            }
+        }
     }
 
-    public List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records) {
+    public synchronized List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records) {
+        return runBatches(Map.of(topic, records));
+    }
+
+    /** Runs records from multiple source topics as one graph evaluation, enabling fan-in. */
+    public synchronized List<ProducedToTopic> runBatches(Map<String, List<ConsumedRecord>> input) {
         Map<Integer, List<VectorSchemaRoot>> frames = new HashMap<>();
         var produced = new ArrayList<ProducedToTopic>();
         try {
@@ -25,16 +37,37 @@ public final class BuiltColumnarTopology {
                 var node = nodes.get(index);
                 switch (node.type()) {
                     case SOURCE -> {
-                        if (!records.isEmpty() && node.sourceTopics().contains(topic)) {
-                            frames.put(index, List.of(node.sourceCodec().decode(records)));
-                        } else {
-                            frames.put(index, List.of());
+                        int sourceIndex = index;
+                        boolean needsDecodedFrame = nodes.stream().anyMatch(candidate ->
+                                candidate.parents().stream().anyMatch(parent -> parent.index() == sourceIndex)
+                                        && (candidate.type() != ColumnarTopology.NodeType.SINK
+                                                || candidate.sinkCodec() != null));
+                        var decoded = new ArrayList<VectorSchemaRoot>();
+                        if (needsDecodedFrame) {
+                            input.forEach((topic, records) -> {
+                                if (!records.isEmpty() && node.sourceTopics().contains(topic)) {
+                                    decoded.add(node.sourceCodec().decode(topic, records));
+                                }
+                            });
                         }
+                        frames.put(index, List.copyOf(decoded));
                     }
-                    case OPERATOR -> frames.put(index, runOperator(node, frames));
+                    case OPERATOR -> frames.put(index, runOperator(index, node, frames));
+                    case MERGE -> frames.put(index, merge(node, frames));
                     case SINK -> {
-                        for (var batch : frames.getOrDefault(node.parent().index(), List.of())) {
-                            for (var record : node.sinkCodec().encode(batch)) {
+                        if (node.sinkCodec() == null) {
+                            var parent = nodes.get(node.parents().get(0).index());
+                            input.forEach((topic, records) -> {
+                                if (parent.sourceTopics().contains(topic)) {
+                                    records.forEach(record -> produced.add(new ProducedToTopic(
+                                            node.sinkTopic(),
+                                            new ProduceRecord(record.key(), record.value(), record.timestamp()))));
+                                }
+                            });
+                            break;
+                        }
+                        for (var batch : frames.getOrDefault(node.parents().get(0).index(), List.of())) {
+                            for (var record : node.sinkCodec().encode(node.sinkTopic(), batch)) {
                                 produced.add(new ProducedToTopic(node.sinkTopic(), record));
                             }
                         }
@@ -54,11 +87,12 @@ public final class BuiltColumnarTopology {
     }
 
     private List<VectorSchemaRoot> runOperator(
+            int nodeIndex,
             ColumnarTopology.NodeDefinition node,
             Map<Integer, List<VectorSchemaRoot>> frames) {
         var outputs = new ArrayList<VectorSchemaRoot>();
-        var processor = node.processor().get();
-        for (var parent : frames.getOrDefault(node.parent().index(), List.of())) {
+        var processor = processors.get(nodeIndex);
+        for (var parent : frames.getOrDefault(node.parents().get(0).index(), List.of())) {
             var input = ArrowBatchSupport.copyRange(
                     parent, 0, parent.getRowCount(), topology.allocator());
             var context = new ColumnarContext();
@@ -79,5 +113,17 @@ public final class BuiltColumnarTopology {
             }
         }
         return List.copyOf(outputs);
+    }
+
+    private List<VectorSchemaRoot> merge(
+            ColumnarTopology.NodeDefinition node,
+            Map<Integer, List<VectorSchemaRoot>> frames) {
+        var inputs = node.parents().stream()
+                .flatMap(parent -> frames.getOrDefault(parent.index(), List.of()).stream())
+                .toList();
+        if (inputs.isEmpty()) {
+            return List.of();
+        }
+        return List.of(ArrowBatchSupport.concatenate(inputs, topology.allocator()));
     }
 }

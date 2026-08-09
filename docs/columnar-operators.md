@@ -71,18 +71,22 @@ Returned values are coerced to the declared Arrow type:
 | -------------------------------------- | ------------------------------------------------------ |
 | `VarChar` (`Utf8`)                     | anything; `toString()` is applied and encoded as UTF-8 |
 | `VarBinary` (`Binary`)                 | `byte[]` or `ByteBuffer`                               |
-| `BigInt`, `Int`, `SmallInt`, `TinyInt` | any `Number`, narrowed                                 |
-| `UInt1`, `UInt2`, `UInt4`, `UInt8`     | any `Number`                                           |
+| `BigInt`, `Int`, `SmallInt`, `TinyInt` | integral `Number`, checked for overflow                |
+| `UInt1`, `UInt2`, `UInt4`, `UInt8`     | non-negative integral `Number`, checked for overflow   |
 | `Float4`, `Float8`                     | any `Number`                                           |
 | `Bit` (`Bool`)                         | `Boolean`                                              |
-| anything else                          | throws `cannot write Arrow type ...`                   |
+| dates and timestamps                   | epoch `Number` or matching `java.time` value           |
+| decimal                                | `BigDecimal` or numeric text                           |
+| list and fixed-size list               | `Collection<?>`                                        |
+| struct and map                         | `Map<?, ?>`                                            |
+| sparse and dense union                 | the first member compatible with the value             |
 
 `null` writes a null into the column. Because `Utf8` accepts anything, it is the safe
 declaration for a value whose type you cannot pin down.
 
-Dates, timestamps, decimals, lists, and structs are not writable through this path. A
-derived column of those types has to be produced by a custom processor that fills the
-vector itself.
+Dictionary-encoded fields use their physical index vector, so derived values are the
+dictionary indexes. A custom processor is still appropriate when it must also mutate
+the external dictionary provider.
 
 ### groupBy
 
@@ -94,18 +98,20 @@ var totals = BuiltinOp.groupBy(
         new Aggregation("amount", "count", AggregateFunction.COUNT));
 ```
 
-Groups rows by the values of the key columns and applies the aggregations **within the
-current batch**. The output has one row per distinct key, ordered by first appearance,
-with the key columns first and the aggregate columns after them.
+Groups rows by the values of the key columns and retains those groups across every call
+made to the same built topology. The output is the current cumulative result, ordered
+by first appearance, with key columns first and aggregate columns after them.
 
-| Function | Output type                                                             | Semantics                                                     |
-| -------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `COUNT`  | `Int(64)`                                                               | rows in the group, nulls included                             |
-| `SUM`    | `FloatingPoint(DOUBLE)` for a floating-point input, otherwise `Int(64)` | non-numeric values are ignored; an all-null group yields null |
-| `MIN`    | the input column's type                                                 | nulls skipped; values compared with `Comparable`              |
-| `MAX`    | the input column's type                                                 | nulls skipped; values compared with `Comparable`              |
+| Function | Output type             | Semantics                                                  |
+| -------- | ----------------------- | ---------------------------------------------------------- |
+| `COUNT`  | `Int(64)`               | rows in the group, nulls included                          |
+| `SUM`    | the input column's type | exact integral accumulation; an all-null group yields null |
+| `MIN`    | the input column's type | nulls skipped; values compared with `Comparable`           |
+| `MAX`    | the input column's type | nulls skipped; values compared with `Comparable`           |
 
-An unknown key or input column throws
+Pass an `ArrowType` as the fourth `Aggregation` argument to override any output type.
+Integral narrowing and accumulation are checked and throw `ArithmeticException` on
+overflow. An unknown key or input column throws
 `ColumnarException("Arrow column does not exist: ...")`, and an empty key list throws
 `groupBy requires at least one key column`.
 
@@ -116,15 +122,13 @@ Two consequences of the output schema are easy to miss:
   record with timestamp `0`, and a downstream `RowCodec` sink emits records with a null
   key and timestamp `0`. Group by `__partition` or add the columns back with
   `withColumns` if you need them.
-- Aggregating within a batch is not the same as aggregating over a stream. The same key
-  in the next fetched batch starts from scratch. If you need running totals, sink the partial
-  results and combine them downstream, either in a Kafka Streams application or in a
-  second pass.
+- Rebuilding the topology creates fresh aggregate state. Keep one
+  `BuiltColumnarTopology` for the lifetime of a running partition or consumer group.
 
 Key values are read as Java objects: `Utf8` columns become `String`, binary columns
 become read-only `ByteBuffer`, numeric columns become the boxed numeric type. Grouping
-by a column whose Arrow type `setValue` cannot write back (a timestamp, for example)
-decodes fine but fails when the output row is written.
+by dates, timestamps, decimals, lists, structs, or unions writes through the same
+coercion rules as `withColumns`.
 
 ## Custom processors
 
@@ -151,9 +155,8 @@ final class TopN implements ColumnarProcessor {
 topology.addOperator("top-10", () -> new TopN(allocator, 10), source);
 ```
 
-The supplier form is the one to use for stateful processors: it is invoked once per
-node each time `runBatch` executes, so per-batch scratch state is naturally scoped and
-never leaks between batches.
+The supplier form is the one to use for stateful processors: it is invoked once when
+the topology is built, and that instance receives every later batch for the node.
 
 Splitting a batch is just several `forward` calls:
 

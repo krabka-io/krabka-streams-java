@@ -2,9 +2,12 @@ import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.tasks.Jar
 
 plugins {
-    base
+    `java-platform`
+    `maven-publish`
+    signing
 }
 
 group = "io.krabka"
@@ -16,6 +19,13 @@ val moduleDescriptions = mapOf(
     "krabka-streams-schema-serde" to "Schema registry serdes for krabka streams",
     "krabka-streams-columnar" to "Apache Arrow batch processing for krabka streams",
     "krabka-streams-test-utils" to "Test helpers for krabka streams",
+)
+
+val automaticModuleNames = mapOf(
+    "krabka-streams" to "io.krabka.streams",
+    "krabka-streams-schema-serde" to "io.krabka.streams.schema.serde",
+    "krabka-streams-columnar" to "io.krabka.streams.columnar",
+    "krabka-streams-test-utils" to "io.krabka.streams.test.utils",
 )
 
 subprojects {
@@ -47,6 +57,19 @@ subprojects {
         (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all,-missing", true)
     }
 
+    tasks.withType<Jar>().configureEach {
+        manifest.attributes["Automatic-Module-Name"] = automaticModuleNames.getValue(project.name)
+    }
+
+    val shadedJar = tasks.register<Jar>("shadedJar") {
+        dependsOn(project.configurations.getByName("runtimeClasspath").buildDependencies)
+        archiveClassifier.set("all")
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(project.extensions.getByType<SourceSetContainer>()["main"].output)
+        from({ project.configurations.getByName("runtimeClasspath").map(project::zipTree) })
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "module-info.class")
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
     }
@@ -61,6 +84,7 @@ subprojects {
         publications {
             create<MavenPublication>("mavenJava") {
                 from(components["java"])
+                artifact(shadedJar)
                 artifactId = project.name
                 pom {
                     name.set(project.name)
@@ -107,6 +131,66 @@ subprojects {
             useInMemoryPgpKeys(key, password)
             sign(extensions.getByType<PublishingExtension>().publications)
         }
+    }
+}
+
+dependencies {
+    constraints {
+        api(project(":krabka-streams"))
+        api(project(":krabka-streams-schema-serde"))
+        api(project(":krabka-streams-columnar"))
+        api(project(":krabka-streams-test-utils"))
+    }
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("krabkaStreamsBom") {
+            from(components["javaPlatform"])
+            artifactId = "krabka-streams-bom"
+            pom {
+                name.set("krabka-streams-bom")
+                description.set("Dependency constraints for krabka streams modules")
+                url.set("https://github.com/krabka-io/krabka-streams-java")
+                licenses {
+                    license {
+                        name.set("Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        distribution.set("repo")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("krabka-io")
+                        name.set("krabka-io")
+                        url.set("https://github.com/krabka-io")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:https://github.com/krabka-io/krabka-streams-java.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/krabka-io/krabka-streams-java.git")
+                    url.set("https://github.com/krabka-io/krabka-streams-java")
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "centralPortal"
+            url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
+            credentials {
+                username = System.getenv("MAVEN_CENTRAL_USERNAME")
+                password = System.getenv("MAVEN_CENTRAL_PASSWORD")
+            }
+        }
+    }
+}
+
+signing {
+    val key = System.getenv("SIGNING_KEY")
+    if (!key.isNullOrBlank()) {
+        useInMemoryPgpKeys(key, System.getenv("SIGNING_PASSWORD"))
+        sign(publishing.publications)
     }
 }
 

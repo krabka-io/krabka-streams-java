@@ -27,8 +27,8 @@ with a single background fetch and a retriable exception.
 var client = new KrabkaSchemaRegistryClient(URI.create("http://localhost:8081"));
 ```
 
-The second constructor injects a `java.net.http.HttpClient` and a Jackson
-`ObjectMapper`, which is how you add TLS, proxies, timeouts, or authentication:
+The injected-client constructor configures TLS, proxies, and timeouts. A convenience
+constructor accepts a username and password for HTTP Basic authentication:
 
 ```java
 var httpClient = HttpClient.newBuilder()
@@ -36,15 +36,12 @@ var httpClient = HttpClient.newBuilder()
         .sslContext(sslContext)
         .build();
 var client = new KrabkaSchemaRegistryClient(baseUri, httpClient, new ObjectMapper());
+var basic = new KrabkaSchemaRegistryClient(baseUri, username, password);
 ```
 
-Trailing slashes in the base URI are stripped. All requests set both `Accept` and
+Trailing slashes are normalized and context paths are preserved. Requests set both `Accept` and
 `Content-Type` to `application/vnd.schemaregistry.v1+json`. Subjects are URL-encoded,
 with `+` rewritten to `%20`, so subjects containing `/` or spaces are safe.
-
-> The client resolves absolute paths against the base URI, so a base URI with a
-> context path (`https://host/registry`) loses that path. Point the client at the
-> registry root.
 
 ### Operations
 
@@ -55,12 +52,19 @@ with `+` rewritten to `%20`, so subjects containing `/` or spaces are safe.
 | `latest(subject)`                              | `GET /subjects/{subject}/versions/latest` | `RegisteredSchema`                               |
 | `latestId(subject)`                            | same as `latest`                          | the ID only                                      |
 | `schemaById(id)`                               | `GET /schemas/ids/{id}`                   | `FetchedSchema`                                  |
+| `subjects()`                                   | `GET /subjects`                           | subject names                                    |
+| `versions(subject)`                            | `GET /subjects/{subject}/versions`        | version numbers                                  |
+| `version(subject, version)`                    | `GET /subjects/{subject}/versions/{v}`    | `RegisteredSchema`                               |
+| `compatibility(...)` / `setCompatibility(...)` | `GET` / `PUT /config[...]`                | compatibility level                              |
+| `deleteSubject(...)` / `deleteVersion(...)`    | `DELETE /subjects/...`                    | deleted versions                                 |
+| `resolvedSchemaById(id)`                       | ID and referenced-version reads           | schema plus resolved references                  |
 
 Records returned by the client:
 
 ```java
-public record RegisteredSchema(int id, int version, String schema, String schemaType, String messageType) {}
-public record FetchedSchema(String schema, String messageType) {}
+public record SchemaReference(String name, String subject, int version) {}
+public record RegisteredSchema(..., List<SchemaReference> references) {}
+public record FetchedSchema(String schema, String messageType, List<SchemaReference> references) {}
 ```
 
 `schemaType` and `messageType` are `null` when the registry omits them. Avro is the
@@ -90,8 +94,8 @@ try {
 }
 ```
 
-The client never retries. Compose retries onto the returned future, or let the
-`SchemaFetchPendingException` path below retry for you.
+The client retries transport failures, HTTP 429, and 5xx responses twice by default.
+The four-argument injected-client constructor configures that retry count.
 
 ## SchemaCache
 
@@ -131,11 +135,12 @@ topic-record-name conventions:
 
 ```java
 SubjectNameStrategy recordName = (topic, role) -> "com.example.Order";
-var cache = new SchemaCache(client, RegisterMode.LOOKUP_ONLY, recordName);
+var serde = AvroSerde.forValue(Order.class, cache, recordName);
 ```
 
-`cache.subject(topic, role)` exposes the strategy so you can compute the same subject
-the serdes will use.
+Each serde factory accepts an optional strategy, so one cache can serve topic-name and
+record-name subjects together. `cache.subject(topic, role, strategy)` exposes the same
+calculation.
 
 ### The prewarm cycle
 
@@ -150,12 +155,16 @@ cache.prewarm().join();                 // one registry call per interned subjec
 issues one request per interned subject in parallel and completes when all of them
 complete; a single failure fails the returned future.
 
+Use `prewarmReport()` when startup should continue after partial success. Its
+`PrewarmReport` contains independent `resolved` and `failures` maps.
+
 After `prewarm` the cache holds, for each subject:
 
 - `subjectIds[subject] = id`, which serializers read through `idForSubject`.
 - `writerSchemas[id] = schema`, the local schema text, or the registry's text under
   `USE_LATEST`.
 - `writerMessageTypes[id] = messageType`, when one exists.
+- `writerReferences[id] = schemas`, resolved recursively by reference name.
 
 You can call `prewarm` again later, for example after adding a serde at runtime.
 Subjects that are already resolved are simply resolved again.

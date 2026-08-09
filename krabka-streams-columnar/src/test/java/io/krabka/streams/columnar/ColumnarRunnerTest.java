@@ -45,6 +45,7 @@ class ColumnarRunnerTest {
                     topology, consumer, producer, "in", 0, 100, Duration.ZERO);
 
             assertEquals(101, next);
+            assertEquals(101, consumer.committed(java.util.Set.of(partition)).get(partition).offset());
             assertEquals(1, producer.history().size());
             assertEquals("out", producer.history().get(0).topic());
             try (var result = new ArrowIpcSerde(allocator).deserialize(producer.history().get(0).value())) {
@@ -68,6 +69,23 @@ class ColumnarRunnerTest {
             assertEquals(42, ColumnarRunner.runPartitionOnce(
                     topology, consumer, producer, "in", 0, 42, Duration.ZERO));
             assertEquals(0, producer.history().size());
+        }
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void groupRunnerSubscribesToAllSources() {
+        try (var allocator = new RootAllocator();
+                var consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST);
+                var producer = new MockProducer<byte[], byte[]>(
+                        true, null, new ByteArraySerializer(), new ByteArraySerializer())) {
+            var topology = new ColumnarTopology(allocator);
+            var source = topology.addSource("source", List.of("in-a", "in-b"), new BlobCodec(allocator));
+            topology.addPassThroughSink("sink", "out", source);
+
+            ColumnarRunner.group(topology, consumer, producer);
+
+            assertEquals(java.util.Set.of("in-a", "in-b"), consumer.subscription());
         }
     }
 }

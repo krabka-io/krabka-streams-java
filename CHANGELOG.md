@@ -7,3 +7,4 @@
 - Add native schema registry clients and Avro, Protobuf, and JSON Schema serdes.
 - Add Arrow IPC codecs, row and blob modes, vector operations, topologies, and a partition runner.
 - Add test utilities and live compatibility tests for Apache Kafka 4.3.1 and krabka 0.3.8.
+- Resolve the documented columnar, schema registry, serde, and packaging limitations.

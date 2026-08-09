@@ -15,6 +15,7 @@ import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
+import org.apache.arrow.vector.types.pojo.Schema;
 
 /** Converts JSON-compatible Java records to flat Arrow columns. */
 public final class JsonRowBridge<T> implements RowBridge<T> {
@@ -24,14 +25,28 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
     private final Class<T> type;
     private final ObjectMapper objectMapper;
     private final boolean scalar;
+    private List<Field> fields;
 
     public JsonRowBridge(Class<T> type) {
         this(type, new ObjectMapper());
     }
 
     public JsonRowBridge(Class<T> type, ObjectMapper objectMapper) {
+        this(type, objectMapper, (List<Field>) null);
+    }
+
+    public JsonRowBridge(Class<T> type, Schema schema) {
+        this(type, new ObjectMapper(), Objects.requireNonNull(schema, "schema").getFields());
+    }
+
+    public JsonRowBridge(Class<T> type, ObjectMapper objectMapper, Schema schema) {
+        this(type, objectMapper, Objects.requireNonNull(schema, "schema").getFields());
+    }
+
+    private JsonRowBridge(Class<T> type, ObjectMapper objectMapper, List<Field> fields) {
         this.type = Objects.requireNonNull(type, "type");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.fields = fields == null ? null : List.copyOf(fields);
         this.scalar = type.isPrimitive()
                 || type.isArray()
                 || CharSequence.class.isAssignableFrom(type)
@@ -40,7 +55,7 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
     }
 
     @Override
-    public VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator allocator) {
+    public synchronized VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator allocator) {
         var objects = rows.stream().map(this::objectNode).toList();
         var samples = new LinkedHashMap<String, List<JsonNode>>();
         for (var object : objects) {
@@ -48,12 +63,18 @@ public final class JsonRowBridge<T> implements RowBridge<T> {
                     .computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>())
                     .add(entry.getValue()));
         }
-        var fields = samples.entrySet().stream()
-                .map(entry -> field(entry.getKey(), entry.getValue()))
-                .toList();
-        var root = ArrowBatchSupport.create(fields, rows.size(), allocator);
-        for (int column = 0; column < fields.size(); column++) {
-            var field = fields.get(column);
+        var batchFields = fields;
+        if (batchFields == null) {
+            batchFields = samples.entrySet().stream()
+                    .map(entry -> field(entry.getKey(), entry.getValue()))
+                    .toList();
+            if (!rows.isEmpty()) {
+                fields = batchFields;
+            }
+        }
+        var root = ArrowBatchSupport.create(batchFields, rows.size(), allocator);
+        for (int column = 0; column < batchFields.size(); column++) {
+            var field = batchFields.get(column);
             var vector = root.getVector(column);
             for (int row = 0; row < objects.size(); row++) {
                 writeJson(vector, row, objects.get(row).get(field.getName()), field);

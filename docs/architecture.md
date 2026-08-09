@@ -168,14 +168,13 @@ consumer.poll ──► ConsumedRecord[] ──► source (BatchCodec.decode)
 | `SchemaCache`                | thread-safe; all state in `ConcurrentHashMap`                                   |
 | Serdes                       | thread-safe once the cache is prewarmed; the JSON validator cache is concurrent |
 | `ColumnarTopology`           | not thread-safe while building                                                  |
-| `BuiltColumnarTopology`      | not thread-safe; use one per thread                                             |
+| `BuiltColumnarTopology`      | thread-safe; calls are serialized to protect retained processor state           |
 | `ColumnarTestDriver`         | not thread-safe                                                                 |
 | `SchemaRegistryStub`         | request handling is synchronized                                                |
 | Arrow allocators and roots   | not thread-safe; confine to one thread                                          |
 
-The intended shape for a multi-threaded columnar application is one allocator, one
-built topology, and one consumer/producer pair per thread, with threads partitioned by
-topic-partition.
+One built topology can be shared when serialized processing is acceptable. Use one per
+thread for parallelism and independent processor state.
 
 ## Version pinning
 

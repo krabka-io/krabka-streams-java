@@ -38,7 +38,7 @@ class BlobCodecTest {
     }
 
     @Test
-    void rejectsReservedPayloadAndEmptyInput() {
+    void escapesReservedPayloadAndRejectsEmptyInput() {
         try (var allocator = new RootAllocator()) {
             var codec = new BlobCodec(allocator);
             assertThrows(ColumnarException.class, () -> codec.decode(List.of()));
@@ -52,9 +52,13 @@ class BlobCodecTest {
                     allocator)) {
                 ArrowBatchSupport.setValueCounts(bad);
                 var bytes = new ArrowIpcSerde(allocator).serialize(bad);
-                assertThrows(
-                        ColumnarException.class,
-                        () -> codec.decode(List.of(new ConsumedRecord(null, bytes, 0, 0, 0))));
+                try (var decoded = codec.decode(List.of(new ConsumedRecord(null, bytes, 0, 0, 0)))) {
+                    assertTrue(decoded.getVector(BlobCodec.payloadColumn(BlobCodec.KEY_COLUMN)) != null);
+                    var output = codec.encode(decoded);
+                    try (var restored = new ArrowIpcSerde(allocator).deserialize(output.get(0).value())) {
+                        assertTrue(restored.getVector(BlobCodec.KEY_COLUMN) != null);
+                    }
+                }
             }
         }
     }
@@ -76,6 +80,18 @@ class BlobCodecTest {
                     assertTrue(output.size() > 1);
                     assertTrue(output.stream().allMatch(record -> record.value().length <= 1_024));
                 }
+            }
+        }
+    }
+
+    @Test
+    void rejectsASingleRowOverTheHardCap() {
+        try (var allocator = new RootAllocator();
+                var payload = ArrowTestData.transactions(allocator, new String[] {"too-large"}, new long[] {1})) {
+            var codec = new BlobCodec(allocator, 1);
+            var bytes = new ArrowIpcSerde(allocator).serialize(payload);
+            try (var decoded = codec.decode(List.of(new ConsumedRecord(null, bytes, 0, 0, 0)))) {
+                assertThrows(ColumnarException.class, () -> codec.encode(decoded));
             }
         }
     }

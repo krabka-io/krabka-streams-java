@@ -42,17 +42,21 @@ Package `io.krabka.streams.schema`.
 | ------------ | --------------------------------------------------------------------------------------------------------- |
 | constructor  | `KrabkaSchemaRegistryClient(URI baseUri)`                                                                 |
 | constructor  | `KrabkaSchemaRegistryClient(URI baseUri, HttpClient httpClient, ObjectMapper objectMapper)`               |
+| constructor  | `KrabkaSchemaRegistryClient(URI baseUri, String username, String password)`                               |
+| constructor  | injected client plus `int maxRetries`                                                                     |
 | `register`   | `CompletableFuture<Integer> register(String subject, SchemaKind kind, String schema, String messageType)` |
 | `lookup`     | `CompletableFuture<Integer> lookup(String subject, SchemaKind kind, String schema, String messageType)`   |
 | `latest`     | `CompletableFuture<RegisteredSchema> latest(String subject)`                                              |
 | `latestId`   | `CompletableFuture<Integer> latestId(String subject)`                                                     |
 | `schemaById` | `CompletableFuture<FetchedSchema> schemaById(int schemaId)`                                               |
+| management   | subjects, versions, compatibility, deletion, and reference resolution methods                             |
 
 Nested records:
 
 ```java
-public record RegisteredSchema(int id, int version, String schema, String schemaType, String messageType) {}
-public record FetchedSchema(String schema, String messageType) {}
+public record SchemaReference(String name, String subject, int version) {}
+public record RegisteredSchema(..., List<SchemaReference> references) {}
+public record FetchedSchema(String schema, String messageType, List<SchemaReference> references) {}
 ```
 
 Failures complete the future exceptionally with `SchemaRegistryException`.
@@ -68,9 +72,11 @@ Failures complete the future exceptionally with `SchemaRegistryException`.
 | `subject`               | `String subject(String topic, Role role)`                                                                            |
 | `intern`                | `void intern(String subject, SchemaKind kind, String schema, String messageType)`, idempotent by subject             |
 | `prewarm`               | `CompletableFuture<Void> prewarm()`                                                                                  |
+| `prewarmReport`         | `CompletableFuture<PrewarmReport> prewarmReport()`                                                                   |
 | `idForSubject`          | `OptionalInt idForSubject(String subject)`                                                                           |
 | `writerSchema`          | `String writerSchema(int schemaId)`, which throws `SchemaFetchPendingException` on a miss                            |
 | `writerMessageType`     | `String writerMessageType(int schemaId)`, `null` when unknown                                                        |
+| `writerReferences`      | `Map<String, String> writerReferences(int schemaId)`                                                                 |
 | `seedSubjectId`         | `void seedSubjectId(String subject, int schemaId)`                                                                   |
 | `seedWriterSchema`      | `void seedWriterSchema(int schemaId, String schema)`                                                                 |
 | `seedWriterMessageType` | `void seedWriterMessageType(int schemaId, String messageType)`                                                       |
@@ -84,6 +90,7 @@ Failures complete the future exceptionally with `SchemaRegistryException`.
 | `forValue`                    | `static <T extends SpecificRecord> AvroSerde<T> forValue(Class<T> type, SchemaCache cache)` |
 | `forKey`                      | `static <T extends SpecificRecord> AvroSerde<T> forKey(Class<T> type, SchemaCache cache)`   |
 | `generic`                     | `static AvroSerde<GenericRecord> generic(Schema schema, SchemaCache cache, Role role)`      |
+| `reflect`                     | `static <T> AvroSerde<T> reflect(Class<T> type, SchemaCache cache, Role role)`              |
 | `registerSubject`             | `void registerSubject(String topic)`                                                        |
 | `serializer` / `deserializer` | from `Serde<T>`                                                                             |
 
@@ -113,8 +120,8 @@ Uses the Protobuf message-index framing and verifies the writer's `messageType`.
 | `forValue`        | `static <T> JsonSchemaSerde<T> forValue(Class<T> type, String schema, SchemaCache cache, boolean validate, ObjectMapper objectMapper)` |
 | `registerSubject` | `void registerSubject(String topic)`                                                                                                   |
 
-`validate` applies to deserialization only, against the writer's schema, using the
-Draft 2020-12 dialect.
+`validate` applies in both directions. `$schema` selects Draft 4, 6, 7, 2019-09, or
+2020-12; an extended factory accepts an explicit dialect, strategy, and mapper.
 
 ### ConfluentWireFormat
 
@@ -162,24 +169,27 @@ Package `io.krabka.streams.columnar`.
 
 `public final class`. The topology builder.
 
-| Member         | Signature                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------- |
-| constructor    | `ColumnarTopology(BufferAllocator allocator)`                                                                 |
-| `addSource`    | `ColumnarNode addSource(String name, Collection<String> topics, BatchCodec codec)`                            |
-| `addOperator`  | `ColumnarNode addOperator(String name, BuiltinOp operator, ColumnarNode parent)`                              |
-| `addOperator`  | `ColumnarNode addOperator(String name, Supplier<? extends ColumnarProcessor> processor, ColumnarNode parent)` |
-| `addSink`      | `ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent)`                      |
-| `sourceTopics` | `List<String> sourceTopics()`                                                                                 |
-| `validate`     | `void validate()`, which throws `ColumnarException`                                                           |
-| `build`        | `BuiltColumnarTopology build()`                                                                               |
+| Member               | Signature                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| constructor          | `ColumnarTopology(BufferAllocator allocator)`                                                                 |
+| `addSource`          | `ColumnarNode addSource(String name, Collection<String> topics, BatchCodec codec)`                            |
+| `addOperator`        | `ColumnarNode addOperator(String name, BuiltinOp operator, ColumnarNode parent)`                              |
+| `addOperator`        | `ColumnarNode addOperator(String name, Supplier<? extends ColumnarProcessor> processor, ColumnarNode parent)` |
+| `addMerge`           | `ColumnarNode addMerge(String name, Collection<ColumnarNode> parents)`                                        |
+| `addSink`            | `ColumnarNode addSink(String name, String topic, BatchCodec codec, ColumnarNode parent)`                      |
+| `addPassThroughSink` | `ColumnarNode addPassThroughSink(String name, String topic, ColumnarNode source)`                             |
+| `sourceTopics`       | `List<String> sourceTopics()`                                                                                 |
+| `validate`           | `void validate()`, which throws `ColumnarException`                                                           |
+| `build`              | `BuiltColumnarTopology build()`                                                                               |
 
 ### BuiltColumnarTopology
 
-`public final class`. Validated and reusable, but not thread-safe.
+`public final class`. Validated, stateful, reusable, and synchronized.
 
-| Member     | Signature                                                                    |
-| ---------- | ---------------------------------------------------------------------------- |
-| `runBatch` | `List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records)` |
+| Member       | Signature                                                                    |
+| ------------ | ---------------------------------------------------------------------------- |
+| `runBatch`   | `List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records)` |
+| `runBatches` | `List<ProducedToTopic> runBatches(Map<String, List<ConsumedRecord>> input)`  |
 
 ### ColumnarNode
 
@@ -200,39 +210,40 @@ public static long runPartitionOnce(
         Duration pollTimeout)
 ```
 
-Returns the next offset to read. Does not commit offsets.
+Commits and returns the next offset. `group(...)` creates a subscribed reusable runner;
+group runners provide ordinary and transactional `runOnce` methods.
 
 ### Codecs
 
 | Type            | Signature                                                                                                               |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `BatchCodec`    | `interface`: `VectorSchemaRoot decode(List<ConsumedRecord>)`, `List<ProduceRecord> encode(VectorSchemaRoot)`            |
+| `BatchCodec`    | `interface`: decode/encode methods, with default topic-aware overloads                                                  |
 | `BlobCodec`     | `final class implements BatchCodec`: `BlobCodec(BufferAllocator)`, `BlobCodec(BufferAllocator, int maxRecordBytes)`     |
 | `RowCodec<T>`   | `final class implements BatchCodec`: `RowCodec(Serde<T> valueSerde, RowBridge<T> rowBridge, BufferAllocator allocator)` |
 | `ArrowIpcSerde` | `final class implements Serde<VectorSchemaRoot>`: `ArrowIpcSerde(BufferAllocator)`                                      |
 
 `BlobCodec` constants: `DEFAULT_MAX_RECORD_BYTES` (`900 * 1024`), `KEY_COLUMN`
 (`__key`), `TIMESTAMP_COLUMN` (`__timestamp`), `PARTITION_COLUMN` (`__partition`),
-`OFFSET_COLUMN` (`__offset`).
+`OFFSET_COLUMN` (`__offset`), plus `payloadColumn(String)` for escaped collisions.
 
 ### Row bridges
 
-| Type               | Signature                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `RowBridge<T>`     | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)` |
-| `JsonRowBridge<T>` | `final class implements RowBridge<T>`: `JsonRowBridge(Class<T>)`, `JsonRowBridge(Class<T>, ObjectMapper)`           |
+| Type               | Signature                                                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `RowBridge<T>`     | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)`   |
+| `JsonRowBridge<T>` | `final class implements RowBridge<T>`: constructors accept `Class<T>`, optional `ObjectMapper`, and optional `Schema` |
 
 ### Operators
 
-| Type                | Signature                                                                                 |
-| ------------------- | ----------------------------------------------------------------------------------------- |
-| `ColumnarProcessor` | `@FunctionalInterface void process(ColumnarContext context, VectorSchemaRoot batch)`      |
-| `ColumnarContext`   | `final class`: `void forward(VectorSchemaRoot batch)`                                     |
-| `RowPredicate`      | `@FunctionalInterface boolean test(VectorSchemaRoot batch, int row)`                      |
-| `RowValue`          | `@FunctionalInterface Object value(VectorSchemaRoot batch, int row)`                      |
-| `DerivedColumn`     | `record DerivedColumn(Field field, RowValue value)`                                       |
-| `Aggregation`       | `record Aggregation(String inputColumn, String outputColumn, AggregateFunction function)` |
-| `AggregateFunction` | `enum`: `COUNT`, `SUM`, `MIN`, `MAX`                                                      |
+| Type                | Signature                                                                                                       |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ColumnarProcessor` | `@FunctionalInterface void process(ColumnarContext context, VectorSchemaRoot batch)`                            |
+| `ColumnarContext`   | `final class`: `void forward(VectorSchemaRoot batch)`                                                           |
+| `RowPredicate`      | `@FunctionalInterface boolean test(VectorSchemaRoot batch, int row)`                                            |
+| `RowValue`          | `@FunctionalInterface Object value(VectorSchemaRoot batch, int row)`                                            |
+| `DerivedColumn`     | `record DerivedColumn(Field field, RowValue value)`                                                             |
+| `Aggregation`       | `record Aggregation(String inputColumn, String outputColumn, AggregateFunction function, ArrowType outputType)` |
+| `AggregateFunction` | `enum`: `COUNT`, `SUM`, `MIN`, `MAX`                                                                            |
 
 `BuiltinOp` is a `public final class implements ColumnarProcessor`:
 

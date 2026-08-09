@@ -2,6 +2,7 @@ package io.krabka.streams.schema;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -84,6 +85,21 @@ class SchemaCacheTest {
             });
             assertEquals("demo.Value", cache.writerMessageType(7));
             assertEquals(1, server.count("GET", "/schemas/ids/7"));
+        }
+    }
+
+    @Test
+    void prewarmReportsPartialSuccess() throws Exception {
+        try (var server = new RegistryStub()) {
+            server.reply("POST", "/subjects/good-value/versions", 200, "{\"id\":8}");
+            var cache = new SchemaCache(new KrabkaSchemaRegistryClient(server.uri()));
+            cache.intern("good-value", SchemaKind.AVRO, "\"string\"", null);
+            cache.intern("bad-value", SchemaKind.AVRO, "\"string\"", null);
+
+            var report = cache.prewarmReport().join();
+
+            assertEquals(8, report.resolved().get("good-value"));
+            assertTrue(report.failures().containsKey("bad-value"));
         }
     }
 }

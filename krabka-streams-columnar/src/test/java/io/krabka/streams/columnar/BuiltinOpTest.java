@@ -83,6 +83,39 @@ class BuiltinOpTest {
         }
     }
 
+    @Test
+    void keepsAggregateStateAcrossBatchesAndDetectsOverflow() {
+        try (var allocator = new RootAllocator();
+                var first = ArrowTestData.transactions(allocator, new String[] {"a"}, new long[] {5});
+                var second = ArrowTestData.transactions(allocator, new String[] {"a"}, new long[] {3})) {
+            var operator = BuiltinOp.groupBy(
+                    allocator,
+                    List.of("user"),
+                    new Aggregation("amount", "total", AggregateFunction.SUM));
+            try (var initial = run(operator, first); var result = run(operator, second)) {
+                assertEquals(5, ((BigIntVector) initial.getVector("total")).get(0));
+                assertEquals(8, ((BigIntVector) result.getVector("total")).get(0));
+            }
+            try (var fresh = run(operator.fresh(), second)) {
+                assertEquals(3, ((BigIntVector) fresh.getVector("total")).get(0));
+            }
+
+            try (var max = ArrowTestData.transactions(
+                            allocator, new String[] {"a"}, new long[] {Long.MAX_VALUE});
+                    var one = ArrowTestData.transactions(allocator, new String[] {"a"}, new long[] {1})) {
+                var overflowing = BuiltinOp.groupBy(
+                        allocator,
+                        List.of("user"),
+                        new Aggregation("amount", "total", AggregateFunction.SUM));
+                try (var initial = run(overflowing, max)) {
+                    assertEquals(Long.MAX_VALUE, ((BigIntVector) initial.getVector("total")).get(0));
+                    org.junit.jupiter.api.Assertions.assertThrows(
+                            ArithmeticException.class, () -> run(overflowing, one));
+                }
+            }
+        }
+    }
+
     private static org.apache.arrow.vector.VectorSchemaRoot run(
             BuiltinOp operator, org.apache.arrow.vector.VectorSchemaRoot batch) {
         var context = new ColumnarContext();

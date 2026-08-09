@@ -18,10 +18,11 @@ All artifacts share the group `io.krabka` and the version `1.0.0`.
 
 ```kotlin
 dependencies {
-    implementation("io.krabka:krabka-streams:1.0.0")
-    implementation("io.krabka:krabka-streams-schema-serde:1.0.0")
-    implementation("io.krabka:krabka-streams-columnar:1.0.0")
-    testImplementation("io.krabka:krabka-streams-test-utils:1.0.0")
+    implementation(platform("io.krabka:krabka-streams-bom:1.0.0"))
+    implementation("io.krabka:krabka-streams")
+    implementation("io.krabka:krabka-streams-schema-serde")
+    implementation("io.krabka:krabka-streams-columnar")
+    testImplementation("io.krabka:krabka-streams-test-utils")
 }
 ```
 
@@ -43,9 +44,9 @@ source sets.
 
 Dependencies are declared with the Gradle `api` configuration, which means Avro,
 Protobuf, Jackson, Arrow, and the Kafka Streams API all appear on your compile
-classpath. The JSON Schema validator (`com.networknt:json-schema-validator`) and the
-Arrow Netty allocator (`org.apache.arrow:arrow-memory-netty`) are internal and reach
-you only at runtime.
+classpath. The Arrow Netty allocator (`org.apache.arrow:arrow-memory-netty`) remains a
+runtime-only dependency. Every ordinary jar has a stable `Automatic-Module-Name`; an
+optional `all` classifier bundles runtime dependencies for standalone classpaths.
 
 ## A first Kafka Streams application
 

@@ -63,4 +63,22 @@ class KrabkaSchemaRegistryClientTest {
             assertTrue(registryFailure.getMessage().contains("missing schema"));
         }
     }
+
+    @Test
+    void preservesContextPathAndSupportsRegistryManagement() throws Exception {
+        try (var server = new RegistryStub()) {
+            server.reply("GET", "/registry/subjects", 200, "[\"orders-value\"]");
+            server.reply("GET", "/registry/subjects/orders-value/versions", 200, "[1,2]");
+            server.reply("GET", "/registry/config/orders-value", 200, "{\"compatibilityLevel\":\"BACKWARD\"}");
+            server.reply("PUT", "/registry/config/orders-value", 200, "{\"compatibility\":\"FULL\"}");
+            server.reply("DELETE", "/registry/subjects/orders-value", 200, "[1,2]");
+            var client = new KrabkaSchemaRegistryClient(server.uri().resolve("/registry"));
+
+            assertEquals(java.util.List.of("orders-value"), client.subjects().join());
+            assertEquals(java.util.List.of(1, 2), client.versions("orders-value").join());
+            assertEquals("BACKWARD", client.compatibility("orders-value").join());
+            assertEquals("FULL", client.setCompatibility("orders-value", "FULL").join());
+            assertEquals(java.util.List.of(1, 2), client.deleteSubject("orders-value", true).join());
+        }
+    }
 }

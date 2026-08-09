@@ -19,9 +19,10 @@ consumer.poll ──► List<ConsumedRecord> ──► BatchCodec.decode ──�
                        List<ProducedToTopic) ◄── BatchCodec.encode ◄───┘
 ```
 
-Nothing survives between batches. Every operator sees exactly the rows in the current
-batch, so joins, windows, and aggregates are all _within-batch_ in `1.0.0`. See
-[Limitations](limitations.md).
+The processor instance created when a topology is built survives across calls to
+`runBatch`. Built-in `groupBy` therefore accumulates across batches, and custom joins
+or windows can keep state in their `ColumnarProcessor`. Build once and reuse the
+`BuiltColumnarTopology` when state must survive polls.
 
 ## Reserved metadata columns
 
@@ -34,12 +35,9 @@ Every decoded batch carries four columns that hold Kafka record metadata:
 | `__partition` | `Int(32, signed)`  | source partition                              |
 | `__offset`    | `Int(64, signed)`  | source offset                                 |
 
-They are appended after the payload columns, in that order. Payload schemas must not
-use these names; a collision throws
-
-```text
-payload column `__key` collides with a reserved metadata column
-```
+They are appended after the payload columns, in that order. A colliding payload name
+is escaped in the processing batch; `BlobCodec.payloadColumn(name)` returns that name.
+The sink restores the original payload name before encoding.
 
 The names are also exposed as constants (`BlobCodec.KEY_COLUMN`, `TIMESTAMP_COLUMN`,
 `PARTITION_COLUMN`, and `OFFSET_COLUMN`) so you can reference them without hardcoding
@@ -77,12 +75,10 @@ otherwise the codec throws `Arrow batch schemas differ`. A record that fails to 
 reports its position: `cannot decode Arrow record 3`. An empty record list throws
 `decode called with an empty record batch`.
 
-Encoding drops the metadata columns, serializes the payload as a single Arrow IPC
-stream, and emits it as one record with a `null` key. If the encoded bytes exceed
-`maxRecordBytes`, the batch is split in half by rows and each half is encoded
-recursively, so the output is a list of records that individually fit. A single row
-that exceeds the cap on its own is emitted oversized, because the split cannot go below
-one row.
+Encoding drops the metadata columns, serializes the payload as Arrow IPC records, and
+emits them with a `null` key. It packs the largest consecutive row range that fits
+under `maxRecordBytes`. A single row that exceeds the cap throws `ColumnarException`
+instead of sending a record the broker will reject.
 
 The output timestamp is the `__timestamp` of the **last** row in the batch, or `0` when
 the column is absent or null. All records produced from one batch share that timestamp.
@@ -106,11 +102,8 @@ the key comes from `__key`, and the timestamp comes from `__timestamp` (or `0`).
 Row count is preserved in both directions, so a batch of _n_ records decodes to _n_
 rows and encodes back to _n_ records.
 
-> `RowCodec` calls the serde with an empty topic name (`""`). Any serde that derives a
-> subject from the topic will therefore look for the subject `-value`, and that includes
-> every serde in [`krabka-streams-schema-serde`](serdes.md). Either use
-> topic-independent serdes here, or seed the cache under that subject with
-> `cache.seedSubjectId("-value", id)`.
+Topologies pass the source or sink topic into `RowCodec`, so topic-derived schema
+subjects work the same way here as in ordinary Kafka consumers and producers.
 
 ### RowBridge and JsonRowBridge
 
@@ -132,7 +125,8 @@ try (var batch = bridge.rowsToBatch(orders, allocator)) {
 }
 ```
 
-Column inference works per field, from the first non-null sample across the batch:
+Column inference uses the first non-null sample and is retained by the bridge for every
+later batch. To pin it up front, pass an Arrow `Schema` to the constructor.
 
 | JSON node         | Arrow type              | Notes                                           |
 | ----------------- | ----------------------- | ----------------------------------------------- |
@@ -189,15 +183,17 @@ topology.addSink("audit", "audit-log", codec, large);       // fan-out
 var built = topology.build();
 ```
 
-| Method                                                             | Purpose                                                                                   |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `addSource(name, topics, codec)`                                   | Decodes records for any of `topics`. At least one topic is required.                      |
-| `addOperator(name, BuiltinOp, parent)`                             | Adds a built-in operator.                                                                 |
-| `addOperator(name, Supplier<? extends ColumnarProcessor>, parent)` | Adds a custom processor; the supplier is invoked once per node each time `runBatch` runs. |
-| `addSink(name, topic, codec, parent)`                              | Encodes its parent's batches to `topic`.                                                  |
-| `sourceTopics()`                                                   | Every topic named by any source, for subscribing a consumer.                              |
-| `validate()`                                                       | Checks the graph; also called by `build()`.                                               |
-| `build()`                                                          | Returns a reusable `BuiltColumnarTopology`.                                               |
+| Method                                                             | Purpose                                                                           |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `addSource(name, topics, codec)`                                   | Decodes records for any of `topics`. At least one topic is required.              |
+| `addOperator(name, BuiltinOp, parent)`                             | Adds a built-in operator.                                                         |
+| `addOperator(name, Supplier<? extends ColumnarProcessor>, parent)` | Adds a custom processor; its supplier is invoked once when the topology is built. |
+| `addMerge(name, parents)`                                          | Concatenates two or more same-schema upstream branches.                           |
+| `addSink(name, topic, codec, parent)`                              | Encodes its parent's batches to `topic`.                                          |
+| `addPassThroughSink(name, topic, source)`                          | Copies source records byte-for-byte without codec work.                           |
+| `sourceTopics()`                                                   | Every topic named by any source, for subscribing a consumer.                      |
+| `validate()`                                                       | Checks the graph; also called by `build()`.                                       |
+| `build()`                                                          | Returns a reusable `BuiltColumnarTopology`.                                       |
 
 `addSource`, `addOperator`, and `addSink` return a `ColumnarNode`, an opaque handle you
 pass as the parent of later nodes. A node from a different topology throws
@@ -229,6 +225,10 @@ for (var output : produced) {
 }
 ```
 
+`runBatches(Map<String, List<ConsumedRecord>>)` evaluates several source topics
+together, which lets `addMerge` express fan-in across topics. Group runners use this
+form for each consumer poll.
+
 Semantics worth knowing:
 
 - A source produces a batch only when `records` is non-empty **and** the source lists
@@ -240,9 +240,8 @@ Semantics worth knowing:
   forwarded batch.
 - A sink encodes every batch its parent produced, appending one `ProducedToTopic` per
   encoded record.
-- A built topology is reusable and holds no per-batch state, so calling `runBatch`
-  repeatedly is expected. It is not thread-safe; use one built topology per thread, or
-  serialize access.
+- A built topology is reusable, retains processor state, and serializes concurrent
+  `runBatch` calls so Arrow roots are never shared concurrently.
 - All intermediate batches are closed before `runBatch` returns, including on the
   exception path.
 
@@ -260,8 +259,8 @@ accessor call, so they never alias consumer or producer buffers. `value` must no
 
 ## ColumnarRunner
 
-`ColumnarRunner` is a minimal driver: one fetch, process, produce, and flush cycle for
-a single partition.
+`ColumnarRunner` supports explicit single-partition cycles and reusable consumer-group
+runners.
 
 ```java
 long next = ColumnarRunner.runPartitionOnce(
@@ -274,37 +273,25 @@ In order, it:
 2. polls once with `pollTimeout` and takes the records for that partition;
 3. returns `offset` unchanged if the poll was empty, without producing anything;
 4. converts the records to `ConsumedRecord` (a `null` value becomes `new byte[0]`);
-5. builds the topology and runs the batch;
+5. runs the topology (an overload accepts a pre-built instance);
 6. sends each produced record, passing `null` for a negative timestamp so the producer
    applies its own;
 7. flushes the producer;
-8. returns the highest consumed offset plus one.
+8. commits and returns the highest consumed offset plus one.
 
-Because it assigns rather than subscribes, do not hand it a consumer that is part of a
-consumer group subscription. And because it never commits, **you own the offset**:
-persist the returned value wherever your application keeps progress, and pass it back
-on the next call.
+For automatic partition discovery and rebalancing, create a reusable group runner. It
+subscribes to every source topic and retains one built topology across polls:
 
 ```java
-long offset = loadOffset();
+var runner = ColumnarRunner.group(topology, consumer, producer);
 while (running) {
-    long next = ColumnarRunner.runPartitionOnce(
-            topology, consumer, producer, topic, partition, offset, Duration.ofMillis(250));
-    if (next != offset) {
-        storeOffset(next);
-        offset = next;
-    }
+    runner.runOnce(Duration.ofMillis(250));
 }
 ```
 
-`runPartitionOnce` calls `topology.build()` on every invocation, which re-validates the
-graph. For a hot loop, prefer calling `build()` once yourself and driving
-`BuiltColumnarTopology.runBatch` directly; `ColumnarRunner` is the convenient path, not
-the fastest one.
-
-For exactly-once delivery, wrap the call in a transactional producer and write your
-offsets inside the same transaction. The runner itself provides at-least-once semantics
-when you store the offset after the flush.
+`runner.runOnceTransactional(timeout)` sends produced records and consumed offsets in
+one producer transaction. Configure and initialize the transactional producer before
+creating the runner.
 
 ## Next
 

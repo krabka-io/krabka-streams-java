@@ -105,6 +105,9 @@ declare dependencies and module-specific test flags.
 | Javadoc                  | UTF-8, `Xdoclint:all,-missing`                 | root build              |
 | Test framework           | JUnit Platform, `junit-bom:5.13.4`             | root build              |
 | Sources and Javadoc jars | always built                                   | root build              |
+| Shaded jar               | `all` classifier                               | root build              |
+| JPMS name                | stable `Automatic-Module-Name`                 | root build              |
+| Version platform         | `krabka-streams-bom`                           | root build              |
 | Arrow JVM flag           | `--add-opens=java.base/java.nio=ALL-UNNAMED`   | columnar and test-utils |
 
 `-Werror` means any warning fails the build, including deprecations, raw types,
@@ -210,7 +213,8 @@ Steps:
 ## Publishing
 
 Every subproject applies `maven-publish` and `signing`, and produces a `mavenJava`
-publication with the main jar, a sources jar, and a Javadoc jar.
+publication with the main, sources, Javadoc, and `all` jars. The root project publishes
+the `krabka-streams-bom` platform.
 
 The POM carries the module description from the root build, the project URL, the
 Apache-2.0 license, the `krabka-io` developer entry, and SCM coordinates, which is the
