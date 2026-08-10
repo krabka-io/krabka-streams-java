@@ -1,6 +1,6 @@
 # API reference
 
-Every public type in `1.1.1`, grouped by module. Types not listed here are
+Every public type in `1.2.0`, grouped by module. Types not listed here are
 package-private implementation details and are not part of the compatibility surface.
 
 The full Javadoc is browsable at <https://krabka-io.github.io/krabka-streams-java/>.
@@ -259,6 +259,19 @@ Runner support types:
 | `RowBridge<T>`     | `interface`: `VectorSchemaRoot rowsToBatch(List<T> rows, BufferAllocator)`, `List<T> batchToRows(VectorSchemaRoot)` |
 | `JsonRowBridge<T>` | constructors accept `Class<T>`, optional `ObjectMapper` or Arrow `Schema`; `fromJsonSchema` derives fields          |
 
+### ArrowValues
+
+`public final class` of static helpers for `RowBridge` and `ColumnarProcessor`
+implementations, exposing the same type-coercing conversions the built-in operators
+use:
+
+```java
+static VectorSchemaRoot createRoot(List<Field> fields, int rows, BufferAllocator allocator)
+static void set(FieldVector vector, int row, Object value)
+static Object get(FieldVector vector, int row)
+static void finish(VectorSchemaRoot root)
+```
+
 ### Operators
 
 | Type                        | Signature                                                                                                       |
@@ -320,6 +333,53 @@ access. `value` must not be null; `key` may be.
 
 ---
 
+## `krabka-streams-columnar-schema`
+
+Package `io.krabka.streams.columnar.schema`. See
+[Columnar processing](columnar.md) for usage. The module depends on both
+`krabka-streams-columnar` and `krabka-streams-schema-serde`, plus
+`protobuf-java-util` as an `implementation` dependency for the canonical Protobuf
+JSON fallback.
+
+### AvroBatchCodec
+
+`public final class implements BatchCodec`
+
+| Member            | Signature                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `generic`         | `static AvroBatchCodec generic(Schema schema, SchemaCache cache, BufferAllocator allocator)`                             |
+| `forValue`        | `static <T extends SpecificRecord> AvroBatchCodec forValue(Class<T> type, SchemaCache cache, BufferAllocator allocator)` |
+| `registerSubject` | `void registerSubject(String topic)`                                                                                     |
+| `arrowSchema`     | `Schema arrowSchema()` (Arrow), the payload columns without metadata columns                                             |
+| decode/encode     | the four `BatchCodec` methods                                                                                            |
+
+### ProtobufBatchCodec
+
+`public final class implements BatchCodec`
+
+| Member            | Signature                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `of`              | `static <T extends Message> ProtobufBatchCodec of(T defaultInstance, SchemaCache cache, BufferAllocator allocator)` |
+| `registerSubject` | `void registerSubject(String topic)`                                                                                |
+| `arrowSchema`     | `Schema arrowSchema()` (Arrow), the payload columns without metadata columns                                        |
+| decode/encode     | the four `BatchCodec` methods                                                                                       |
+
+### Row bridges and schema converters
+
+| Type                                     | Signature                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `AvroRowBridge<T extends IndexedRecord>` | `implements RowBridge<T>`: `generic(Schema)`, `forSpecific(Class<T>)`, `arrowSchema()`                             |
+| `ProtobufRowBridge<T extends Message>`   | `implements RowBridge<T>`: `of(T defaultInstance)`, `arrowSchema()`                                                |
+| `AvroArrowSchemas`                       | `static Schema toArrowSchema(org.apache.avro.Schema)`, `static Field toArrowField(String, org.apache.avro.Schema)` |
+| `ProtobufArrowSchemas`                   | `static Schema toArrowSchema(Descriptor)`, `static Field toArrowField(FieldDescriptor)`                            |
+
+The bridges derive their Arrow schema once, at construction, from the reader schema
+or message descriptor; mid-stream writer evolution never changes the columns.
+Conversion choices that the Arrow type alone cannot reverse are tagged with
+`krabka.avro.*`, `krabka.proto.*`, or `krabka.json` field metadata.
+
+---
+
 ## `krabka-streams-test-utils`
 
 Package `io.krabka.streams.test`. See [Testing](testing.md) for usage.
@@ -359,8 +419,8 @@ This module also re-exports Apache Kafka's `kafka-streams-test-utils`, including
 
 Nothing is deprecated yet. The public surface above is what future releases will be
 judged against; package-private types
-(`AbstractSchemaSerde`, `ArrowBatchSupport`, `ProtobufSchemaPrinter`) may change at any
-time.
+(`AbstractSchemaSerde`, `ArrowBatchSupport`, `BridgeMetadata`, `ProtobufSchemaPrinter`)
+may change at any time.
 
 Transitive `api` dependencies are part of the surface too: Kafka Streams 4.3.1, Avro
 1.12.1, Protobuf 4.33.5, Jackson 2.22.0, and Arrow 19.0.0.

@@ -102,3 +102,25 @@ pre,
   font-family: "Berkeley Mono", "IBM Plex Mono", ui-monospace, "Cascadia Code",
     Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
+
+/* Syntax highlighting: javadoc --syntax-highlight bundles highlight.js with its
+ * own stylesheet; these overrides retint the common tokens to the krabka palette. */
+.hljs-keyword,
+.hljs-literal {
+  color: #93300f;
+  font-weight: 600;
+}
+
+.hljs-string {
+  color: #c2401c;
+}
+
+.hljs-comment {
+  color: #5c5546;
+  font-style: italic;
+}
+
+.hljs-meta,
+.hljs-number {
+  color: #8a6d1f;
+}

@@ -1,6 +1,6 @@
 # Feature parity
 
-Version `1.1.1` requires each row to have a Java API and a passing test.
+Version `1.2.0` requires each row to have a Java API and a passing test.
 
 | Area                                  | Java implementation                                               | Status   |
 | ------------------------------------- | ----------------------------------------------------------------- | -------- |
@@ -12,6 +12,7 @@ Version `1.1.1` requires each row to have a Java API and a passing test.
 | Streams group protocol                | `KrabkaStreamsConfig`                                             | Complete |
 | Schema registry serdes                | Native HTTP client, cache, Avro, Protobuf, and JSON Schema serdes | Complete |
 | Arrow columnar processing             | Arrow IPC, blob and row codecs, operators, topology, and runner   | Complete |
+| Avro and Protobuf columnar bridges    | `AvroBatchCodec`, `ProtobufBatchCodec`, row bridges, converters   | Complete |
 | Broker and registry integration tests | `integrationTest` with Apache Kafka 4.3.1 and krabka 0.3.8 images | Complete |
 
 The broker test uses the streams group protocol and exactly-once v2. It also checks local standby

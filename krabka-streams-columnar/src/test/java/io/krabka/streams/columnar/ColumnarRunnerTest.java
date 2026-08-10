@@ -189,6 +189,48 @@ class ColumnarRunnerTest {
         }
     }
 
+    @Test
+    @SuppressWarnings("deprecation")
+    void rethrowsRetriableFailuresInsteadOfSkippingOrDeadLettering() {
+        try (var allocator = new RootAllocator();
+                var payload = ArrowTestData.transactions(
+                        allocator, new String[] {"a"}, new long[] {1});
+                var consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST);
+                var producer = new MockProducer<byte[], byte[]>(
+                        true, null, new ByteArraySerializer(), new ByteArraySerializer())) {
+            var codec = new BlobCodec(allocator);
+            var topology = new ColumnarTopology(allocator);
+            var source = topology.addSource("source", List.of("in"), codec);
+            var retriable = topology.addOperator(
+                    "retriable",
+                    () -> (context, batch) -> {
+                        throw new org.apache.kafka.common.errors.TimeoutException("registry fetch pending");
+                    },
+                    source);
+            topology.addSink("sink", "out", codec, retriable);
+            var partition = new TopicPartition("in", 0);
+            consumer.assign(List.of(partition));
+            consumer.updateBeginningOffsets(Map.of(partition, 0L));
+            consumer.schedulePollTask(() -> consumer.addRecord(new ConsumerRecord<>(
+                    "in", 0, 0, null, new ArrowIpcSerde(allocator).serialize(payload))));
+            var metrics = new ColumnarMetrics();
+
+            var built = topology.build();
+            assertThatThrownBy(() -> ColumnarRunner.runGroupOnce(
+                            built,
+                            consumer,
+                            producer,
+                            Duration.ZERO,
+                            ColumnarErrorPolicy.deadLetter("dlq"),
+                            metrics))
+                    .isInstanceOf(org.apache.kafka.common.errors.TimeoutException.class);
+
+            assertThat(producer.history()).isEmpty();
+            assertThat(consumer.committed(java.util.Set.of(partition))).doesNotContainKey(partition);
+            built.close();
+        }
+    }
+
     private static final class FailingStatefulProcessor implements StatefulColumnarProcessor {
         private int calls;
 

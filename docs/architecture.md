@@ -9,7 +9,10 @@ krabka-streams                 org.apache.kafka:kafka-streams (api)
       │                                  json-schema-validator (implementation)
       ├── krabka-streams-columnar        arrow-vector (api), jackson-databind (implementation)
       │                                  arrow-memory-netty (runtimeOnly)
-      └── krabka-streams-test-utils      depends on all three
+      ├── krabka-streams-columnar-schema krabka-streams-schema-serde and
+      │                                  krabka-streams-columnar (api),
+      │                                  protobuf-java-util (implementation)
+      └── krabka-streams-test-utils      depends on all four
                                          kafka-streams-test-utils (api)
 ```
 
@@ -17,10 +20,12 @@ krabka-streams                 org.apache.kafka:kafka-streams (api)
 Kafka Streams version is pinned, so the other modules inherit it and applications get a
 consistent classpath from any one artifact.
 
-The two feature modules do not know about each other. A columnar topology cannot use a
-schema serde's registry integration except through the generic `Serde` interface, and
-the schema module has no Arrow dependency. `krabka-streams-test-utils` is the only
-place they meet.
+The two base feature modules do not know about each other: the schema module has no
+Arrow dependency and the columnar module has no Avro or Protobuf dependency. They meet
+in exactly two deliberate places. `krabka-streams-columnar-schema` is the production
+bridge — its batch codecs and row bridges map registry schemas onto native Arrow
+columns — and `krabka-streams-test-utils` is the testing one. Applications that use
+neither Avro nor Protobuf in columnar topologies never load the bridge module.
 
 Dependencies are declared with `api` where the types appear in public signatures
 (`Serde`, `VectorSchemaRoot`, `Schema`, `Message`, `ObjectMapper`) and with
@@ -167,6 +172,7 @@ consumer.poll ──► ConsumedRecord[] ──► source (BatchCodec.decode)
 | `KrabkaSchemaRegistryClient` | thread-safe; stateless over an `HttpClient`                                     |
 | `SchemaCache`                | thread-safe; all state in `ConcurrentHashMap`                                   |
 | Serdes                       | thread-safe once the cache is prewarmed; the JSON validator cache is concurrent |
+| Batch codecs and row bridges | thread-safe; the Arrow schema is fixed at construction and rows copy on convert |
 | `ColumnarTopology`           | not thread-safe while building                                                  |
 | `BuiltColumnarTopology`      | thread-safe; serialized calls and state isolated by logical partition           |
 | `ColumnarTestDriver`         | not thread-safe                                                                 |
@@ -183,6 +189,7 @@ thread for parallelism and independent processor state.
 | Apache Kafka Streams            | 4.3.1   | `api`                                        |
 | Apache Avro                     | 1.12.1  | `api`                                        |
 | Protobuf Java                   | 4.33.5  | `api`                                        |
+| Protobuf Java Util              | 4.33.5  | `implementation`                             |
 | Jackson Databind                | 2.22.0  | `api` (serde), `implementation` (columnar)   |
 | Apache Arrow                    | 19.0.0  | `api` (vector), `runtimeOnly` (memory-netty) |
 | networknt json-schema-validator | 2.0.4   | `implementation`                             |

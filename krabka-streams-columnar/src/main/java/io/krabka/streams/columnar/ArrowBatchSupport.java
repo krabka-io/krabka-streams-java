@@ -19,7 +19,12 @@ import org.apache.arrow.vector.DecimalVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
+import org.apache.arrow.vector.FixedSizeBinaryVector;
 import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.TimeMicroVector;
+import org.apache.arrow.vector.TimeMilliVector;
+import org.apache.arrow.vector.TimeNanoVector;
+import org.apache.arrow.vector.TimeSecVector;
 import org.apache.arrow.vector.TimeStampVector;
 import org.apache.arrow.vector.SmallIntVector;
 import org.apache.arrow.vector.TinyIntVector;
@@ -318,6 +323,12 @@ final class ArrowBatchSupport {
         if (vector.isNull(row)) {
             return null;
         }
+        if (vector instanceof UInt8Vector unsigned) {
+            return unsigned.getObjectNoOverflow(row);
+        }
+        if (vector instanceof TimeMilliVector times) {
+            return times.getObject(row).toLocalTime();
+        }
         var value = vector.getObject(row);
         if (value instanceof Text text) {
             return text.toString();
@@ -384,6 +395,29 @@ final class ArrowBatchSupport {
             target.setSafe(row, epochMillis(value));
         } else if (vector instanceof TimeStampVector target) {
             target.setSafe(row, timestampValue(value, vector.getField().getType()));
+        } else if (vector instanceof TimeSecVector target) {
+            target.setSafe(row, value instanceof java.time.LocalTime time
+                    ? time.toSecondOfDay()
+                    : Math.toIntExact(exactLong(value)));
+        } else if (vector instanceof TimeMilliVector target) {
+            target.setSafe(row, value instanceof java.time.LocalTime time
+                    ? Math.toIntExact(time.toNanoOfDay() / 1_000_000L)
+                    : Math.toIntExact(exactLong(value)));
+        } else if (vector instanceof TimeMicroVector target) {
+            target.setSafe(row, value instanceof java.time.LocalTime time
+                    ? time.toNanoOfDay() / 1_000L
+                    : exactLong(value));
+        } else if (vector instanceof TimeNanoVector target) {
+            target.setSafe(row, value instanceof java.time.LocalTime time
+                    ? time.toNanoOfDay()
+                    : exactLong(value));
+        } else if (vector instanceof FixedSizeBinaryVector target) {
+            var bytes = binaryBytes(value);
+            if (bytes.length != target.getByteWidth()) {
+                throw new ColumnarException(
+                        "fixed-size binary column requires " + target.getByteWidth() + " bytes, got " + bytes.length);
+            }
+            target.setSafe(row, bytes);
         } else if (vector instanceof DecimalVector target) {
             target.setSafe(row, decimal(value));
         } else if (vector instanceof Decimal256Vector target) {
@@ -448,9 +482,20 @@ final class ArrowBatchSupport {
         vector.endValue(row, values.size());
     }
 
+    private static byte[] binaryBytes(Object value) {
+        if (value instanceof ByteBuffer buffer) {
+            var copy = buffer.duplicate();
+            var bytes = new byte[copy.remaining()];
+            copy.get(bytes);
+            return bytes;
+        }
+        return (byte[]) value;
+    }
+
     private static boolean accepts(FieldVector vector, Object value) {
         return (value instanceof CharSequence && vector instanceof VarCharVector)
-                || (value instanceof byte[] || value instanceof ByteBuffer) && vector instanceof VarBinaryVector
+                || (value instanceof byte[] || value instanceof ByteBuffer)
+                        && (vector instanceof VarBinaryVector || vector instanceof FixedSizeBinaryVector)
                 || value instanceof Boolean && vector instanceof BitVector
                 || value instanceof Float && vector instanceof Float4Vector
                 || value instanceof Double && vector instanceof Float8Vector
@@ -468,6 +513,10 @@ final class ArrowBatchSupport {
                         && (vector instanceof DateDayVector || vector instanceof DateMilliVector)
                 || (value instanceof java.time.Instant || value instanceof java.time.LocalDateTime)
                         && vector instanceof TimeStampVector
+                || value instanceof java.time.LocalTime && (vector instanceof TimeSecVector
+                        || vector instanceof TimeMilliVector
+                        || vector instanceof TimeMicroVector
+                        || vector instanceof TimeNanoVector)
                 || value instanceof Collection<?> && (vector instanceof ListVector
                         || vector instanceof FixedSizeListVector)
                 || value instanceof Map<?, ?> && (vector instanceof StructVector || vector instanceof MapVector);

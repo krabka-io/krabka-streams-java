@@ -18,13 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          distribution: temurin
-          java-version: 17
-      - uses: gradle/actions/setup-gradle@v6
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
       - name: Build the documentation site
-        run: ./gradlew javadocSite
+        # Hermetic: javadoc runs from Bazel's pinned remote JDK 25, so the
+        # output never depends on the runner's installed Java.
+        run: bazel build //:javadoc-site
       - name: Configure GitHub Pages
         # Fails fast with a clear message if Pages is not enabled for the
         # repository (Settings > Pages > Source: GitHub Actions).
@@ -32,7 +34,7 @@ jobs:
       - name: Upload the site artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: build/javadoc-site
+          path: bazel-bin/javadoc-site
 
   deploy:
     needs: build

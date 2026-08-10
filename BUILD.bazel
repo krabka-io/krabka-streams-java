@@ -1,14 +1,60 @@
 load("@npm//:defs.bzl", "npm_link_all_packages")
 load("@npm//:markdownlint-cli2/package_json.bzl", markdownlint_cli2 = "bin")
 load("@npm//:prettier/package_json.bzl", prettier = "bin")
+load("//tools:javadoc.bzl", "aggregate_javadoc", "javadoc_site")
 
 exports_files(["maven_install.json"])
+
+# The hermetic mirror of Gradle's aggregateJavadoc and javadocSite tasks: the
+# Pages workflow builds //:javadoc-site so the published documentation never
+# depends on the runner's installed JDK.
+aggregate_javadoc(
+    name = "aggregate-javadoc",
+    srcs = [
+        "//krabka-streams:main_srcs",
+        "//krabka-streams-columnar:main_srcs",
+        "//krabka-streams-columnar-schema:main_srcs",
+        "//krabka-streams-schema-serde:main_srcs",
+        "//krabka-streams-test-utils:main_srcs",
+    ],
+    bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +
+             " is licensed under the Apache License 2.0.",
+    groups = {
+        "Kafka Streams": "io.krabka.streams",
+        "Schema registry and serdes": "io.krabka.streams.schema",
+        "Columnar processing": "io.krabka.streams.columnar",
+        "Avro and Protobuf Arrow bridges": "io.krabka.streams.columnar.schema",
+        "Test utilities": "io.krabka.streams.test",
+    },
+    jdk = "@remotejdk25_linux//:jdk",
+    overview = "docs/site/overview.html",
+    properties = "gradle.properties",
+    stylesheet = "docs/site/javadoc-theme.css",
+    deps = [
+        "//krabka-streams",
+        "//krabka-streams-columnar",
+        "//krabka-streams-columnar-schema",
+        "//krabka-streams-schema-serde",
+        "//krabka-streams-test-utils",
+    ],
+)
+
+javadoc_site(
+    name = "javadoc-site",
+    api = ":aggregate-javadoc",
+    index = "docs/site/index.html",
+    properties = "gradle.properties",
+)
 
 npm_link_all_packages()
 
 MARKDOWN_FILES = glob(
     ["**/*.md"],
-    exclude = ["bazel-*/**"],
+    exclude = [
+        "bazel-*/**",
+        "**/build/**",
+        "node_modules/**",
+    ],
 )
 
 prettier.prettier_test(

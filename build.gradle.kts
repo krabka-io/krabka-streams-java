@@ -6,6 +6,7 @@ import org.gradle.jvm.tasks.Jar
 
 plugins {
     `java-platform`
+    `jvm-toolchains`
     `maven-publish`
     signing
 }
@@ -18,6 +19,7 @@ val moduleDescriptions = mapOf(
     "krabka-streams" to "Apache Kafka Streams API and krabka defaults",
     "krabka-streams-schema-serde" to "Schema registry serdes for krabka streams",
     "krabka-streams-columnar" to "Apache Arrow batch processing for krabka streams",
+    "krabka-streams-columnar-schema" to "Avro and Protobuf Arrow bridges for krabka streams",
     "krabka-streams-test-utils" to "Test helpers for krabka streams",
 )
 
@@ -25,8 +27,15 @@ val automaticModuleNames = mapOf(
     "krabka-streams" to "io.krabka.streams",
     "krabka-streams-schema-serde" to "io.krabka.streams.schema.serde",
     "krabka-streams-columnar" to "io.krabka.streams.columnar",
+    "krabka-streams-columnar-schema" to "io.krabka.streams.columnar.schema",
     "krabka-streams-test-utils" to "io.krabka.streams.test.utils",
 )
+
+// Compilation stays on the Java 17 toolchain, but Javadoc runs with JDK 25's tool:
+// its doclet adds --syntax-highlight (JDK-8348282), which bundles highlight.js and
+// highlights {@snippet} and <pre>{@code} fragments without any custom scripting.
+val javadocLanguageVersion = JavaLanguageVersion.of(25)
+val rootJavaToolchains = extensions.getByType<JavaToolchainService>()
 
 subprojects {
     group = rootProject.group
@@ -52,11 +61,16 @@ subprojects {
         options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror", "-parameters"))
     }
 
+    val javaToolchains = extensions.getByType<JavaToolchainService>()
     tasks.withType<Javadoc>().configureEach {
+        javadocTool.set(javaToolchains.javadocToolFor {
+            languageVersion.set(javadocLanguageVersion)
+        })
         options.encoding = "UTF-8"
         (options as StandardJavadocDocletOptions).apply {
             addBooleanOption("Xdoclint:all", true)
             addBooleanOption("Werror", true)
+            addBooleanOption("-syntax-highlight", true)
             addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
         }
         inputs.file(rootProject.file("docs/site/javadoc-theme.css"))
@@ -146,6 +160,7 @@ dependencies {
         api(project(":krabka-streams"))
         api(project(":krabka-streams-schema-serde"))
         api(project(":krabka-streams-columnar"))
+        api(project(":krabka-streams-columnar-schema"))
         api(project(":krabka-streams-test-utils"))
     }
 }
@@ -295,6 +310,9 @@ dependencies {
 val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
     description = "Generates one Javadoc run over every module's public API."
     group = documentationGroup
+    javadocTool.set(rootJavaToolchains.javadocToolFor {
+        languageVersion.set(javadocLanguageVersion)
+    })
     setDestinationDir(layout.buildDirectory.dir("docs/aggregate-javadoc").get().asFile)
     subprojects.forEach { subproject ->
         source(subproject.extensions.getByType<SourceSetContainer>()["main"].allJava)
@@ -308,11 +326,13 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         windowTitle = "krabka streams for Java $version API"
         addBooleanOption("Xdoclint:all", true)
         addBooleanOption("Werror", true)
+        addBooleanOption("-syntax-highlight", true)
         addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
         overview = rootProject.file("docs/site/overview.html").absolutePath
         group("Kafka Streams", "io.krabka.streams")
         group("Schema registry and serdes", "io.krabka.streams.schema")
         group("Columnar processing", "io.krabka.streams.columnar")
+        group("Avro and Protobuf Arrow bridges", "io.krabka.streams.columnar.schema")
         group("Test utilities", "io.krabka.streams.test")
         bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +
             " is licensed under the Apache License 2.0."

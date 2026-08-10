@@ -6,18 +6,19 @@ It uses the Apache Kafka Streams API and adds krabka schema registry and Apache 
 The minimum Java version is 17.
 
 ```kotlin
-implementation("io.krabka:krabka-streams:1.1.1")
+implementation("io.krabka:krabka-streams:1.2.0")
 ```
 
 ## Modules
 
-| Artifact                                | Purpose                                      |
-| --------------------------------------- | -------------------------------------------- |
-| `io.krabka:krabka-streams`              | Apache Kafka Streams API and krabka defaults |
-| `io.krabka:krabka-streams-schema-serde` | Avro, Protobuf, and JSON Schema serdes       |
-| `io.krabka:krabka-streams-columnar`     | Apache Arrow batch processing                |
-| `io.krabka:krabka-streams-test-utils`   | Test helpers for all modules                 |
-| `io.krabka:krabka-streams-bom`          | Version constraints for every module         |
+| Artifact                                   | Purpose                                      |
+| ------------------------------------------ | -------------------------------------------- |
+| `io.krabka:krabka-streams`                 | Apache Kafka Streams API and krabka defaults |
+| `io.krabka:krabka-streams-schema-serde`    | Avro, Protobuf, and JSON Schema serdes       |
+| `io.krabka:krabka-streams-columnar`        | Apache Arrow batch processing                |
+| `io.krabka:krabka-streams-columnar-schema` | Avro and Protobuf Arrow bridges              |
+| `io.krabka:krabka-streams-test-utils`      | Test helpers for all modules                 |
+| `io.krabka:krabka-streams-bom`             | Version constraints for every module         |
 
 Each module depends on `krabka-streams`, so any one of them puts the Kafka Streams API
 on your classpath at the version this release pins.
@@ -86,7 +87,7 @@ To consume the source directly from another Bazel module, add this to its
 `MODULE.bazel` (replace the commit with the revision you want to pin):
 
 ```starlark
-bazel_dep(name = "krabka_streams_java", version = "1.1.1")
+bazel_dep(name = "krabka_streams_java", version = "1.2.0")
 git_override(
     module_name = "krabka_streams_java",
     remote = "https://github.com/krabka-io/krabka-streams-java.git",
@@ -146,6 +147,11 @@ state per logical partition across fetched batches. The group runner adds snapsh
 rebalance hooks, metrics, acknowledged asynchronous sends, and skip or dead-letter
 error policies. `GzipBatchCodec` provides bounded per-record compression.
 
+`krabka-streams-columnar-schema` bridges the registry serdes into the columnar
+runtime: `AvroBatchCodec` and `ProtobufBatchCodec` decode registry-framed topics into
+batches whose columns follow the record schema — structs, lists, maps, decimals, and
+timestamps as native Arrow types — and encode processed batches back.
+
 See [Columnar processing](docs/columnar.md) and [Columnar operators](docs/columnar-operators.md).
 
 ## Test utilities
@@ -158,7 +164,7 @@ See [Testing](docs/testing.md).
 
 ## Status
 
-The current version is `1.1.1`. See [PARITY.md](PARITY.md) for the parity checklist,
+The current version is `1.2.0`. See [PARITY.md](PARITY.md) for the parity checklist,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [runtime constraints](docs/limitations.md).
 
 ## License

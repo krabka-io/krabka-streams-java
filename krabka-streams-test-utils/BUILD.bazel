@@ -12,6 +12,7 @@ java_library(
     exports = [
         "//krabka-streams",
         "//krabka-streams-columnar",
+        "//krabka-streams-columnar-schema",
         "//krabka-streams-schema-serde",
         "@krabka_streams_maven//:org_apache_kafka_kafka_streams_test_utils",
     ],
@@ -57,4 +58,10 @@ java_test(
         "@krabka_streams_maven//:org_assertj_assertj_core",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
     ],
+)
+
+filegroup(
+    name = "main_srcs",
+    srcs = glob(["src/main/java/**/*.java"]),
+    visibility = ["//:__pkg__"],
 )

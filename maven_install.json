@@ -4,6 +4,7 @@
     "com.fasterxml.jackson.core:jackson-core": -328762284,
     "com.fasterxml.jackson.core:jackson-databind": 1159874844,
     "com.google.protobuf:protobuf-java": 99127134,
+    "com.google.protobuf:protobuf-java-util": 861438049,
     "com.google.testparameterinjector:test-parameter-injector-junit5": -585723585,
     "com.networknt:json-schema-validator": 35984412,
     "org.apache.arrow:arrow-memory-core": -313467058,
@@ -32,6 +33,7 @@
     "com.github.luben:zstd-jni": -851900223,
     "com.google.auto.value:auto-value-annotations": 1653305993,
     "com.google.code.findbugs:jsr305": 870839855,
+    "com.google.code.gson:gson": -1575757252,
     "com.google.errorprone:error_prone_annotations": 833623751,
     "com.google.flatbuffers:flatbuffers-java": -566291013,
     "com.google.guava:failureaccess": -1890754729,
@@ -39,6 +41,7 @@
     "com.google.guava:listenablefuture": 1079558157,
     "com.google.j2objc:j2objc-annotations": 248818742,
     "com.google.protobuf:protobuf-java": -384462041,
+    "com.google.protobuf:protobuf-java-util": -1300630766,
     "com.google.testparameterinjector:test-parameter-injector-junit5": -2013413518,
     "com.networknt:json-schema-validator": 875845495,
     "commons-codec:commons-codec": 58403102,
@@ -137,6 +140,12 @@
       },
       "version": "3.0.2"
     },
+    "com.google.code.gson:gson": {
+      "shasums": {
+        "jar": "d3999291855de495c94c743761b8ab5176cfeabe281a5ab0d8e8d45326fd703e"
+      },
+      "version": "2.8.9"
+    },
     "com.google.errorprone:error_prone_annotations": {
       "shasums": {
         "jar": "9e6814cb71816988a4fd1b07a993a8f21bb7058d522c162b1de849e19bea54ae"
@@ -176,6 +185,12 @@
     "com.google.protobuf:protobuf-java": {
       "shasums": {
         "jar": "cb9e00d6e3d4b1305f3fdc147490ce347bfe8c05dc821a433b23b2ff28749bb1"
+      },
+      "version": "4.33.5"
+    },
+    "com.google.protobuf:protobuf-java-util": {
+      "shasums": {
+        "jar": "0115f55d2b18567b11baff5efaacba62ca6636346bc15c62fd359311839ad37d"
       },
       "version": "4.33.5"
     },
@@ -419,6 +434,12 @@
       "com.google.j2objc:j2objc-annotations",
       "org.checkerframework:checker-qual"
     ],
+    "com.google.protobuf:protobuf-java-util": [
+      "com.google.code.findbugs:jsr305",
+      "com.google.code.gson:gson",
+      "com.google.errorprone:error_prone_annotations",
+      "com.google.protobuf:protobuf-java"
+    ],
     "com.google.testparameterinjector:test-parameter-injector-junit5": [
       "com.google.auto.value:auto-value-annotations",
       "com.google.code.findbugs:jsr305",
@@ -617,6 +638,17 @@
       "javax.annotation.concurrent",
       "javax.annotation.meta"
     ],
+    "com.google.code.gson:gson": [
+      "com.google.gson",
+      "com.google.gson.annotations",
+      "com.google.gson.internal",
+      "com.google.gson.internal.bind",
+      "com.google.gson.internal.bind.util",
+      "com.google.gson.internal.reflect",
+      "com.google.gson.internal.sql",
+      "com.google.gson.reflect",
+      "com.google.gson.stream"
+    ],
     "com.google.errorprone:error_prone_annotations": [
       "com.google.errorprone.annotations",
       "com.google.errorprone.annotations.concurrent"
@@ -654,6 +686,9 @@
     "com.google.protobuf:protobuf-java": [
       "com.google.protobuf",
       "com.google.protobuf.compiler"
+    ],
+    "com.google.protobuf:protobuf-java-util": [
+      "com.google.protobuf.util"
     ],
     "com.google.testparameterinjector:test-parameter-injector-junit5": [
       "com.google.testing.junit.testparameterinjector.junit5"
@@ -1413,6 +1448,7 @@
       "com.github.luben:zstd-jni",
       "com.google.auto.value:auto-value-annotations",
       "com.google.code.findbugs:jsr305",
+      "com.google.code.gson:gson",
       "com.google.errorprone:error_prone_annotations",
       "com.google.flatbuffers:flatbuffers-java",
       "com.google.guava:failureaccess",
@@ -1420,6 +1456,7 @@
       "com.google.guava:listenablefuture",
       "com.google.j2objc:j2objc-annotations",
       "com.google.protobuf:protobuf-java",
+      "com.google.protobuf:protobuf-java-util",
       "com.google.testparameterinjector:test-parameter-injector-junit5",
       "com.networknt:json-schema-validator",
       "commons-codec:commons-codec",

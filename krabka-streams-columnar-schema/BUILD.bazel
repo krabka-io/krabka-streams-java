@@ -1,0 +1,43 @@
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
+
+java_library(
+    name = "krabka-streams-columnar-schema",
+    srcs = glob(["src/main/java/**/*.java"]),
+    javacopts = ["--release", "17", "-parameters"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//krabka-streams-columnar",
+        "//krabka-streams-schema-serde",
+        "@krabka_streams_maven//:com_google_protobuf_protobuf_java",
+        "@krabka_streams_maven//:com_google_protobuf_protobuf_java_util",
+        "@krabka_streams_maven//:org_apache_arrow_arrow_memory_core",
+        "@krabka_streams_maven//:org_apache_arrow_arrow_vector",
+        "@krabka_streams_maven//:org_apache_avro_avro",
+    ],
+    exports = [
+        "//krabka-streams-columnar",
+        "//krabka-streams-schema-serde",
+    ],
+)
+
+java_test(
+    name = "tests",
+    srcs = glob(["src/test/java/**/*.java"]),
+    args = ["execute", "--select-package=io.krabka.streams.columnar.schema", "--fail-if-no-tests"],
+    javacopts = ["--release", "17", "-parameters"],
+    jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    use_testrunner = False,
+    deps = [
+        ":krabka-streams-columnar-schema",
+        "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
+        "@krabka_streams_maven//:org_assertj_assertj_core",
+        "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
+    ],
+)
+
+filegroup(
+    name = "main_srcs",
+    srcs = glob(["src/main/java/**/*.java"]),
+    visibility = ["//:__pkg__"],
+)

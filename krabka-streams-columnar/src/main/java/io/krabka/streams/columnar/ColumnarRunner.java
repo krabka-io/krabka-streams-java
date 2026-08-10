@@ -438,7 +438,7 @@ public final class ColumnarRunner {
                 } catch (RuntimeException error) {
                     restore(topology, partition, before);
                     prior.remove(partition);
-                    if (errorPolicy.action() == ColumnarErrorPolicy.Action.FAIL) {
+                    if (errorPolicy.action() == ColumnarErrorPolicy.Action.FAIL || retriable(error)) {
                         throw error;
                     }
                     int deadLetters = 0;
@@ -458,6 +458,15 @@ public final class ColumnarRunner {
             prior.forEach((partition, state) -> restore(topology, partition, state));
             throw error;
         }
+    }
+
+    private static boolean retriable(Throwable error) {
+        for (var cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ConsumedRecord consumed(org.apache.kafka.clients.consumer.ConsumerRecord<byte[], byte[]> record) {
