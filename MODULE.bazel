@@ -15,6 +15,11 @@ register_toolchains(
     "@toolchains_buildbuddy//toolchains/cc:ubuntu_gcc_x86_64",
 )
 
+# The documentation targets run javadoc from a hermetic JDK 25, whose doclet has
+# --syntax-highlight; compilation toolchains are unaffected.
+java_toolchains = use_extension("@rules_java//java:extensions.bzl", "toolchains")
+use_repo(java_toolchains, "remotejdk25_linux")
+
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
     name = "krabka_streams_maven",

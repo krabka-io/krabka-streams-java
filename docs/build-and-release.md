@@ -201,15 +201,19 @@ Runs on pushes to `main` and manually through `workflow_dispatch`, publishing th
 documentation site to GitHub Pages at
 <https://krabka-io.github.io/krabka-streams-java/>.
 
-The `build` job runs `./gradlew javadocSite`, which assembles `build/javadoc-site`:
-the landing page from `docs/site/index.html` (with `@VERSION@` replaced by the
-current version) plus one aggregated Javadoc run over every module under `api/`.
+The `build` job runs `bazel build //:javadoc-site`, which assembles
+`bazel-bin/javadoc-site`: the landing page from `docs/site/index.html` (with
+`@VERSION@` replaced by the current version) plus one aggregated Javadoc run over
+every module under `api/`. The rules live in `tools/javadoc.bzl` and run javadoc
+from Bazel's pinned `remotejdk25_linux`, so the published site is hermetic — it
+never depends on the runner's installed Java — and the JDK 25 doclet's
+`--syntax-highlight` option bundles highlight.js to color the `{@code}` examples.
 Aggregation makes cross-module references link and gives the whole API one search
-index; `docs/site/javadoc-theme.css` restyles the standard doclet and
-`docs/site/overview.html` supplies the overview text. Javadoc tasks run with the
-JDK 25 tool — while compilation stays on the Java 17 toolchain — so the doclet's
-`--syntax-highlight` option can bundle highlight.js and color the `{@code}`
-examples; the theme stylesheet retints its tokens to the krabka palette. The `deploy` job publishes
+index; `docs/site/javadoc-theme.css` restyles the standard doclet and retints the
+highlight tokens to the krabka palette, and `docs/site/overview.html` supplies the
+overview text. The Gradle equivalents remain: `./gradlew javadocSite` renders the
+same site locally, and the published `-javadoc.jar`s run the same JDK 25 javadoc
+tool through Gradle's toolchains while compilation stays on Java 17. The `deploy` job publishes
 the uploaded artifact with `actions/deploy-pages`; it alone holds the
 `pages: write` and `id-token: write` permissions, and a `pages` concurrency group
 keeps deployments sequential without cancelling one in flight.

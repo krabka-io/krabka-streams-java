@@ -19,7 +19,8 @@
   instead of discarding healthy batches.
 - Syntax-highlight every Javadoc code example, in the module javadoc jars and on the
   documentation site, by running Javadoc with the JDK 25 tool and its
-  `--syntax-highlight` option, retinted to the site palette.
+  `--syntax-highlight` option, retinted to the site palette; the Pages site now
+  builds through Bazel with a pinned remote JDK, hermetically.
 
 ## 1.1.1 - 2026-08-10
 
