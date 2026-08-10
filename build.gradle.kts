@@ -35,6 +35,7 @@ val automaticModuleNames = mapOf(
 // its doclet adds --syntax-highlight (JDK-8348282), which bundles highlight.js and
 // highlights {@snippet} and <pre>{@code} fragments without any custom scripting.
 val javadocLanguageVersion = JavaLanguageVersion.of(25)
+val rootJavaToolchains = extensions.getByType<JavaToolchainService>()
 
 subprojects {
     group = rootProject.group
@@ -60,8 +61,9 @@ subprojects {
         options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror", "-parameters"))
     }
 
+    val javaToolchains = extensions.getByType<JavaToolchainService>()
     tasks.withType<Javadoc>().configureEach {
-        javadocTool.set(the<JavaToolchainService>().javadocToolFor {
+        javadocTool.set(javaToolchains.javadocToolFor {
             languageVersion.set(javadocLanguageVersion)
         })
         options.encoding = "UTF-8"
@@ -308,7 +310,7 @@ dependencies {
 val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
     description = "Generates one Javadoc run over every module's public API."
     group = documentationGroup
-    javadocTool.set(the<JavaToolchainService>().javadocToolFor {
+    javadocTool.set(rootJavaToolchains.javadocToolFor {
         languageVersion.set(javadocLanguageVersion)
     })
     setDestinationDir(layout.buildDirectory.dir("docs/aggregate-javadoc").get().asFile)
