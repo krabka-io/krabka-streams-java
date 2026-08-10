@@ -18,7 +18,32 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** A small, stateful Confluent Schema Registry test server. */
+/**
+ * A small, stateful Confluent Schema Registry test server.
+ *
+ * <p>The stub binds an HTTP server to an ephemeral loopback port and implements the
+ * subset of the registry REST API that {@code KrabkaSchemaRegistryClient} needs:
+ * registering a schema, looking a schema up, fetching a subject's latest version, and
+ * fetching a schema by ID. Schemas are deduplicated by content, IDs are assigned
+ * sequentially from 1, and everything lives in memory until {@link #close()}.
+ *
+ * <p>Request counts are recorded per method and path, so tests can assert caching
+ * behavior such as "the second deserialization did not fetch the schema again".
+ *
+ * <h2>Example</h2>
+ *
+ * <pre>{@code
+ * try (var registry = new SchemaRegistryStub()) {
+ *     var client = new KrabkaSchemaRegistryClient(registry.uri());
+ *     var cache = new SchemaCache(client);
+ *
+ *     serde.registerSubject("orders");
+ *     cache.prewarm().join();
+ *
+ *     assertThat(registry.requestCount("POST", "/subjects/orders-value/versions")).isEqualTo(1);
+ * }
+ * }</pre>
+ */
 public final class SchemaRegistryStub implements AutoCloseable {
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -29,21 +54,39 @@ public final class SchemaRegistryStub implements AutoCloseable {
     private final Map<String, List<Integer>> subjectVersions = new HashMap<>();
     private final Map<RequestKey, AtomicInteger> requestCounts = new HashMap<>();
 
+    /**
+     * Starts the stub on an ephemeral loopback port.
+     *
+     * @throws IOException if the HTTP server cannot bind
+     */
     public SchemaRegistryStub() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", this::handle);
         server.start();
     }
 
+    /**
+     * Returns the base URI clients should connect to.
+     *
+     * @return the loopback URI of the running stub
+     */
     public URI uri() {
         return URI.create("http://127.0.0.1:" + server.getAddress().getPort());
     }
 
+    /**
+     * Returns how many requests the stub has served for a method and path.
+     *
+     * @param method the HTTP method, for example {@code "GET"}
+     * @param path the raw request path, for example {@code "/schemas/ids/1"}
+     * @return the number of matching requests served so far
+     */
     public synchronized int requestCount(String method, String path) {
         var count = requestCounts.get(new RequestKey(method, path));
         return count == null ? 0 : count.get();
     }
 
+    /** Stops the HTTP server and discards all registered schemas. */
     @Override
     public void close() {
         server.stop(0);

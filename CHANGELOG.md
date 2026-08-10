@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 - 2026-08-10
+
+- Document every public type, member, and record component with full Javadoc, and add
+  a usage example to every public type.
+- Enforce complete API documentation by raising the Javadoc lint from
+  `Xdoclint:all,-missing` to `Xdoclint:all` with warnings as errors.
+
 ## 1.1.0 - 2026-08-09
 
 - Resolve the documented columnar, schema registry, serde, and packaging limitations.

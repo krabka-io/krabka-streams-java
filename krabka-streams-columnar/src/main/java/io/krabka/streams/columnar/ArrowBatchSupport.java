@@ -41,6 +41,10 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.Text;
 
+/**
+ * Internal Arrow batch helpers: reserved metadata columns, row and range copies,
+ * concatenation, joins, and type-coercing value reads and writes.
+ */
 final class ArrowBatchSupport {
     static final String KEY = "__key";
     static final String TIMESTAMP = "__timestamp";

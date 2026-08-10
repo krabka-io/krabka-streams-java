@@ -55,7 +55,7 @@ subprojects {
     tasks.withType<Javadoc>().configureEach {
         options.encoding = "UTF-8"
         (options as StandardJavadocDocletOptions).apply {
-            addBooleanOption("Xdoclint:all,-missing", true)
+            addBooleanOption("Xdoclint:all", true)
             addBooleanOption("Werror", true)
         }
     }

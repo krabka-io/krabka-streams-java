@@ -100,10 +100,10 @@ declare dependencies and module-specific test flags.
 | Setting                  | Value                                          | Where                   |
 | ------------------------ | ---------------------------------------------- | ----------------------- |
 | Group                    | `io.krabka`                                    | root build              |
-| Version                  | `1.1.0`                                        | `gradle.properties`     |
+| Version                  | `1.1.1`                                        | `gradle.properties`     |
 | Java toolchain           | 17                                             | root build              |
 | Compiler                 | `--release 17`, UTF-8, `-Xlint:all`, `-Werror` | root build              |
-| Javadoc                  | UTF-8, `Xdoclint:all,-missing`                 | root build              |
+| Javadoc                  | UTF-8, `Xdoclint:all`, `-Werror`               | root build              |
 | Test framework           | JUnit Platform, `junit-bom:5.13.4`             | root build              |
 | Sources and Javadoc jars | always built                                   | root build              |
 | Shaded jar               | `all` classifier                               | root build              |
