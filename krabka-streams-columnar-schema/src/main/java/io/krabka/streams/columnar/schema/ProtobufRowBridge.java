@@ -148,7 +148,7 @@ public final class ProtobufRowBridge<T extends Message> implements RowBridge<T> 
             for (var entry : (Collection<?>) message.getField(field)) {
                 var entryMessage = (Message) entry;
                 result.put(
-                        scalarToArrow(entryMessage.getField(keyField), keyField, entriesField.getChildren().get(0)),
+                        scalarToArrow(entryMessage.getField(keyField), keyField),
                         valueToArrow(entryMessage.getField(valueField), valueField, valueArrow));
             }
             return result;
@@ -172,10 +172,10 @@ public final class ProtobufRowBridge<T extends Message> implements RowBridge<T> 
                 || field.getType() == Descriptors.FieldDescriptor.Type.GROUP) {
             return messageToArrow((Message) value, arrowField);
         }
-        return scalarToArrow(value, field, arrowField);
+        return scalarToArrow(value, field);
     }
 
-    private Object scalarToArrow(Object value, Descriptors.FieldDescriptor field, Field arrowField) {
+    private Object scalarToArrow(Object value, Descriptors.FieldDescriptor field) {
         return switch (field.getType()) {
             case UINT32, FIXED32 -> Integer.toUnsignedLong((Integer) value);
             case UINT64, FIXED64 -> new BigInteger(Long.toUnsignedString((Long) value));
@@ -203,7 +203,7 @@ public final class ProtobufRowBridge<T extends Message> implements RowBridge<T> 
         }
         if (metadata.containsKey(BridgeMetadata.PROTO_WRAPPER)) {
             var valueField = message.getDescriptorForType().findFieldByName("value");
-            return scalarToArrow(message.getField(valueField), valueField, arrowField);
+            return scalarToArrow(message.getField(valueField), valueField);
         }
         if (arrowField.getType() instanceof org.apache.arrow.vector.types.pojo.ArrowType.Timestamp) {
             var descriptorType = message.getDescriptorForType();
