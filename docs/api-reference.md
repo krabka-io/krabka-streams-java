@@ -1,11 +1,13 @@
 # API reference
 
-Every public type in `1.1.0`, grouped by module. Types not listed here are
+Every public type in `1.1.1`, grouped by module. Types not listed here are
 package-private implementation details and are not part of the compatibility surface.
 
-Javadoc is published alongside each artifact (`-javadoc.jar`) and is generated with
-`Xdoclint:all,-missing` plus `-Werror`. Every package summary includes a runnable-style
-usage example.
+The full Javadoc is browsable at <https://krabka-io.github.io/krabka-streams-java/>.
+Javadoc is also published alongside each artifact (`-javadoc.jar`) and is generated with
+`Xdoclint:all` plus `-Werror`, so every public type and member carries a complete
+comment. Every public type and package summary includes a runnable-style usage
+example.
 
 ---
 

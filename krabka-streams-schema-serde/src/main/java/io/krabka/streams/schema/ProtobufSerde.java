@@ -9,7 +9,32 @@ import java.util.Collections;
 import java.util.Objects;
 import org.apache.kafka.common.errors.SerializationException;
 
-/** A Kafka serde for Confluent-framed Protobuf messages. */
+/**
+ * A Kafka serde for Confluent-framed Protobuf messages.
+ *
+ * <p>The serde is created from a generated message's default instance. The
+ * {@code .proto} schema text registered with the registry is reconstructed from the
+ * message's file descriptor, and the Confluent Protobuf frame — including the
+ * message-index list that identifies nested messages — is written and read
+ * automatically.
+ *
+ * <p>On deserialization the writer's registered {@code messageType} is compared with
+ * the local message's full name; a mismatch throws {@link SerializationException}
+ * instead of silently parsing bytes into the wrong message.
+ *
+ * <h2>Example</h2>
+ *
+ * <pre>{@code
+ * var serde = ProtobufSerde.forValue(Order.getDefaultInstance(), cache);
+ * serde.registerSubject("orders");
+ * cache.prewarm().join();
+ *
+ * byte[] bytes = serde.serializer().serialize("orders", order);
+ * Order roundTripped = serde.deserializer().deserialize("orders", bytes);
+ * }</pre>
+ *
+ * @param <T> the generated Protobuf message type
+ */
 public final class ProtobufSerde<T extends Message> extends AbstractSchemaSerde<T> {
     private final T defaultInstance;
     private final Parser<T> parser;
@@ -33,19 +58,53 @@ public final class ProtobufSerde<T extends Message> extends AbstractSchemaSerde<
         this.messageIndexes = messageIndexes(defaultInstance.getDescriptorForType());
     }
 
+    /**
+     * Creates a value serde for a generated Protobuf message.
+     *
+     * @param <T> the generated Protobuf message type
+     * @param defaultInstance the message's default instance, for example {@code Order.getDefaultInstance()}
+     * @param cache the cache that resolves subjects and writer schemas
+     * @return a value serde for the message type
+     */
     public static <T extends Message> ProtobufSerde<T> forValue(T defaultInstance, SchemaCache cache) {
         return new ProtobufSerde<>(defaultInstance, cache, Role.VALUE);
     }
 
+    /**
+     * Creates a value serde with a custom subject strategy.
+     *
+     * @param <T> the generated Protobuf message type
+     * @param defaultInstance the message's default instance, for example {@code Order.getDefaultInstance()}
+     * @param cache the cache that resolves subjects and writer schemas
+     * @param strategy the subject naming strategy that overrides the cache default
+     * @return a value serde for the message type
+     */
     public static <T extends Message> ProtobufSerde<T> forValue(
             T defaultInstance, SchemaCache cache, SubjectNameStrategy strategy) {
         return new ProtobufSerde<>(defaultInstance, cache, Role.VALUE, strategy);
     }
 
+    /**
+     * Creates a key serde for a generated Protobuf message.
+     *
+     * @param <T> the generated Protobuf message type
+     * @param defaultInstance the message's default instance, for example {@code OrderKey.getDefaultInstance()}
+     * @param cache the cache that resolves subjects and writer schemas
+     * @return a key serde for the message type
+     */
     public static <T extends Message> ProtobufSerde<T> forKey(T defaultInstance, SchemaCache cache) {
         return new ProtobufSerde<>(defaultInstance, cache, Role.KEY);
     }
 
+    /**
+     * Creates a key serde with a custom subject strategy.
+     *
+     * @param <T> the generated Protobuf message type
+     * @param defaultInstance the message's default instance, for example {@code OrderKey.getDefaultInstance()}
+     * @param cache the cache that resolves subjects and writer schemas
+     * @param strategy the subject naming strategy that overrides the cache default
+     * @return a key serde for the message type
+     */
     public static <T extends Message> ProtobufSerde<T> forKey(
             T defaultInstance, SchemaCache cache, SubjectNameStrategy strategy) {
         return new ProtobufSerde<>(defaultInstance, cache, Role.KEY, strategy);

@@ -225,8 +225,9 @@ deprecated `MockConsumer` constructor.
 
 ### Javadoc fails
 
-Javadoc runs with `Xdoclint:all,-missing`. Missing comments are fine; malformed HTML,
-bad `@link` targets, and broken tags are not.
+Javadoc runs with `Xdoclint:all` and `-Werror`. A new public type or member must
+carry a complete comment — including `@param` and `@return` tags — and malformed
+HTML, bad `@link` targets, and broken tags fail the build.
 
 ### A release job fails on missing credentials
 

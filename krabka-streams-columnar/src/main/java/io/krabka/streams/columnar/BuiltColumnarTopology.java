@@ -8,7 +8,31 @@ import java.util.List;
 import java.util.Map;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
-/** A validated and reusable columnar topology. */
+/**
+ * A validated and reusable columnar topology.
+ *
+ * <p>Created by {@link ColumnarTopology#build()}. The built form owns the processor
+ * instances, one set per logical partition number, created lazily when a partition
+ * first processes records. Stateful operators therefore accumulate across calls: keep
+ * one built topology for the lifetime of a running partition or consumer group
+ * member, and {@link #close()} it to release processor state.
+ *
+ * <p>All methods are synchronized; one built topology processes one batch at a time.
+ * Every intermediate Arrow batch created during an evaluation is closed before the
+ * method returns, so callers only handle the returned byte-backed records.
+ *
+ * <h2>Example</h2>
+ *
+ * <pre>{@code
+ * try (var built = topology.build()) {
+ *     List<ProducedToTopic> output = built.runBatch("transactions", records);
+ *
+ *     Map<String, byte[]> snapshots = built.snapshotPartition(0);
+ *     built.releasePartition(0);
+ *     built.restorePartition(0, snapshots);
+ * }
+ * }</pre>
+ */
 public final class BuiltColumnarTopology implements AutoCloseable {
     private final ColumnarTopology topology;
     private final Map<Integer, Map<Integer, ColumnarProcessor>> processors = new HashMap<>();
@@ -17,11 +41,31 @@ public final class BuiltColumnarTopology implements AutoCloseable {
         this.topology = topology;
     }
 
+    /**
+     * Runs one source topic's records through the graph.
+     *
+     * <p>Records are grouped by their partition number and each partition is
+     * evaluated against its own processor state, in ascending partition order.
+     *
+     * @param topic the source topic the records belong to
+     * @param records the fetched records
+     * @return everything the topology's sinks produced, in evaluation order
+     */
     public synchronized List<ProducedToTopic> runBatch(String topic, List<ConsumedRecord> records) {
         return runBatches(Map.of(topic, records));
     }
 
-    /** Runs records from multiple source topics as one graph evaluation, enabling fan-in. */
+    /**
+     * Runs records from multiple source topics as one graph evaluation, enabling
+     * fan-in.
+     *
+     * <p>Use this form when a join or merge needs both sides' records in the same
+     * evaluation. Records are grouped by partition number across all topics, so
+     * co-partitioned topics join partition by partition.
+     *
+     * @param input source topic to fetched records
+     * @return everything the topology's sinks produced, in evaluation order
+     */
     public synchronized List<ProducedToTopic> runBatches(Map<String, List<ConsumedRecord>> input) {
         var partitions = new java.util.TreeSet<Integer>();
         input.values().forEach(records -> records.forEach(record -> partitions.add(record.partition())));
@@ -36,7 +80,22 @@ public final class BuiltColumnarTopology implements AutoCloseable {
         return List.copyOf(result);
     }
 
-    /** Evaluates one co-partitioned set of source batches against isolated processor state. */
+    /**
+     * Evaluates one co-partitioned set of source batches against isolated processor
+     * state.
+     *
+     * <p>This is the lowest-level entry point, used by the runners after they have
+     * grouped a poll by partition. All records must carry the given partition number.
+     * If the evaluation throws, partially forwarded batches are closed, but operator
+     * state may have advanced; runners roll the partition back with
+     * {@link #restorePartition(int, Map)} in that case.
+     *
+     * @param partition the logical partition whose processor state is used
+     * @param input source topic to that partition's fetched records
+     * @return everything the topology's sinks produced, in evaluation order
+     * @throws IllegalArgumentException if a record belongs to another partition
+     * @throws ColumnarException if decoding, an operator, or encoding fails
+     */
     public synchronized List<ProducedToTopic> runPartitionBatches(
             int partition, Map<String, List<ConsumedRecord>> input) {
         input.values().stream().flatMap(List::stream).forEach(record -> {
@@ -136,7 +195,15 @@ public final class BuiltColumnarTopology implements AutoCloseable {
         return List.copyOf(outputs);
     }
 
-    /** Returns snapshots keyed by operator name for one logical partition. */
+    /**
+     * Returns snapshots keyed by operator name for one logical partition.
+     *
+     * <p>Only {@link StatefulColumnarProcessor} nodes, including joins, appear in the
+     * result. A partition that has never processed records returns an empty map.
+     *
+     * @param partition the logical partition to snapshot
+     * @return operator name to snapshot bytes; empty when the partition has no state
+     */
     public synchronized Map<String, byte[]> snapshotPartition(int partition) {
         var partitionProcessors = processors.get(partition);
         if (partitionProcessors == null) {
@@ -152,7 +219,20 @@ public final class BuiltColumnarTopology implements AutoCloseable {
         return java.util.Collections.unmodifiableMap(snapshots);
     }
 
-    /** Restores snapshots before processing the partition. Unknown operator names are ignored. */
+    /**
+     * Restores snapshots before processing the partition. Unknown operator names are
+     * ignored.
+     *
+     * <p>Restoring creates the partition's processors if needed and replaces the
+     * state of every stateful operator whose name appears in the map. Snapshots are
+     * matched by node name, which is why names should stay stable across application
+     * versions.
+     *
+     * @param partition the logical partition to restore
+     * @param snapshots operator name to snapshot bytes, as returned by
+     *     {@link #snapshotPartition(int)}
+     * @throws ColumnarException if a named operator cannot restore its bytes
+     */
     public synchronized void restorePartition(int partition, Map<String, byte[]> snapshots) {
         var byName = new HashMap<String, ColumnarProcessor>();
         var nodes = topology.nodes();
@@ -165,7 +245,15 @@ public final class BuiltColumnarTopology implements AutoCloseable {
         });
     }
 
-    /** Drops all processor state owned by a logical partition. */
+    /**
+     * Drops all processor state owned by a logical partition.
+     *
+     * <p>Closeable processors are closed. The next batch for the partition starts
+     * from fresh processor instances.
+     *
+     * @param partition the logical partition to release
+     * @throws ColumnarException if a processor fails to close
+     */
     public synchronized void releasePartition(int partition) {
         closeProcessors(processors.remove(partition));
     }
@@ -174,6 +262,14 @@ public final class BuiltColumnarTopology implements AutoCloseable {
         return processors.containsKey(partition);
     }
 
+    /**
+     * Releases every partition's processor state.
+     *
+     * <p>The underlying {@link ColumnarTopology} and allocator are not touched and
+     * can build again.
+     *
+     * @throws ColumnarException if a processor fails to close
+     */
     @Override
     public synchronized void close() {
         processors.values().forEach(BuiltColumnarTopology::closeProcessors);

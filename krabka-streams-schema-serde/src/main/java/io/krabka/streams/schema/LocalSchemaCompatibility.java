@@ -13,19 +13,54 @@ import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
-/** Pairwise, network-free schema compatibility checks. */
+/**
+ * Pairwise, network-free schema compatibility checks.
+ *
+ * <p>Checks one candidate schema against one previous schema without contacting a
+ * registry, which makes the checks usable in unit tests and CI gates. Avro uses the
+ * reference {@link SchemaCompatibility} rules; JSON Schema checks type narrowing,
+ * newly required properties, and disallowed properties; Protobuf checks field wire
+ * types, cardinality, and required-field presence by field number.
+ *
+ * <h2>Example</h2>
+ *
+ * <pre>{@code
+ * var result = LocalSchemaCompatibility.avro(
+ *     previousSchemaJson, candidateSchemaJson, LocalSchemaCompatibility.Mode.BACKWARD);
+ * if (!result.compatible()) {
+ *     result.incompatibilities().forEach(System.err::println);
+ * }
+ * }</pre>
+ */
 public final class LocalSchemaCompatibility {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private LocalSchemaCompatibility() {
     }
 
+    /**
+     * The direction of a compatibility check, mirroring registry compatibility levels.
+     */
     public enum Mode {
+        /** New readers must read data written with the previous schema. */
         BACKWARD,
+
+        /** Old readers must read data written with the candidate schema. */
         FORWARD,
+
+        /** Both {@link #BACKWARD} and {@link #FORWARD} must hold. */
         FULL
     }
 
+    /**
+     * Checks two Avro schemas for compatibility.
+     *
+     * @param previousSchema the currently registered schema as JSON text
+     * @param candidateSchema the proposed schema as JSON text
+     * @param mode the direction to check
+     * @return the check result with one message per incompatibility
+     * @throws org.apache.avro.SchemaParseException if either schema is not valid Avro
+     */
     public static Result avro(String previousSchema, String candidateSchema, Mode mode) {
         var previous = new Schema.Parser().parse(previousSchema);
         var candidate = new Schema.Parser().parse(candidateSchema);
@@ -41,6 +76,19 @@ public final class LocalSchemaCompatibility {
         return new Result(errors.isEmpty(), errors);
     }
 
+    /**
+     * Checks two JSON Schemas for compatibility.
+     *
+     * <p>The check walks object properties recursively and reports type narrowing,
+     * properties that became required, and properties rejected by
+     * {@code additionalProperties: false}.
+     *
+     * @param previousSchema the currently registered schema as JSON text
+     * @param candidateSchema the proposed schema as JSON text
+     * @param mode the direction to check
+     * @return the check result with one message per incompatibility
+     * @throws IllegalArgumentException if either document is not valid JSON
+     */
     public static Result json(String previousSchema, String candidateSchema, Mode mode) {
         try {
             var previous = JSON.readTree(previousSchema);
@@ -57,6 +105,18 @@ public final class LocalSchemaCompatibility {
         }
     }
 
+    /**
+     * Checks two Protobuf file descriptors for compatibility.
+     *
+     * <p>Messages are matched by full name and fields by number. A field whose wire
+     * type or cardinality changed, and a required reader field that the writer never
+     * wrote, are reported as incompatibilities.
+     *
+     * @param previous the currently registered schema's file descriptor
+     * @param candidate the proposed schema's file descriptor
+     * @param mode the direction to check
+     * @return the check result with one message per incompatibility
+     */
     public static Result protobuf(
             Descriptors.FileDescriptor previous,
             Descriptors.FileDescriptor candidate,
@@ -196,7 +256,20 @@ public final class LocalSchemaCompatibility {
         return path.isEmpty() ? name : path + "." + name;
     }
 
+    /**
+     * The outcome of one compatibility check.
+     *
+     * @param compatible whether no incompatibilities were found
+     * @param incompatibilities one human-readable message per violation, prefixed with
+     *     the direction that failed
+     */
     public record Result(boolean compatible, List<String> incompatibilities) {
+        /**
+         * Copies the message list so the result is immutable.
+         *
+         * @param compatible whether no incompatibilities were found
+         * @param incompatibilities one human-readable message per violation
+         */
         public Result {
             incompatibilities = List.copyOf(incompatibilities);
         }

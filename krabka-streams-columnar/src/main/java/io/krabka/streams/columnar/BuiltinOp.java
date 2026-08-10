@@ -17,9 +17,45 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 
-/** Creates the built-in Arrow batch operators. */
+/**
+ * Creates the built-in Arrow batch operators.
+ *
+ * <p>Five operators cover the common transformations: {@link #filter filter},
+ * {@link #select select}, {@link #withColumns withColumns},
+ * {@link #groupBy groupBy}, and {@link #windowedGroupBy windowedGroupBy}. Every
+ * factory takes the {@link BufferAllocator} that will own its output batches, and
+ * every operator forwards exactly one batch per input batch.
+ *
+ * <p>Add an operator to a topology with
+ * {@link ColumnarTopology#addOperator(String, BuiltinOp, ColumnarNode)}; the operator
+ * is copied per logical partition there, so {@code groupBy} state never leaks across
+ * partitions. The grouping operators are stateful and cumulative: they retain groups
+ * across batches and participate in snapshot and restore.
+ *
+ * <h2>Example</h2>
+ *
+ * <pre>{@code
+ * var source = topology.addSource("source", List.of("transactions"), codec);
+ * var large = topology.addOperator(
+ *     "large",
+ *     BuiltinOp.filter(allocator, (batch, row) ->
+ *         ((BigIntVector) batch.getVector("amount")).get(row) > 4),
+ *     source);
+ * var totals = topology.addOperator(
+ *     "totals",
+ *     BuiltinOp.groupBy(
+ *         allocator,
+ *         List.of("user"),
+ *         new Aggregation("amount", "total", AggregateFunction.SUM)),
+ *     large);
+ * topology.addSink("sink", "user-totals", codec, totals);
+ * }</pre>
+ */
 public final class BuiltinOp implements StatefulColumnarProcessor {
+    /** The window start column added by {@link #windowedGroupBy}, epoch milliseconds. */
     public static final String WINDOW_START_COLUMN = "__window_start";
+
+    /** The window end column added by {@link #windowedGroupBy}, epoch milliseconds. */
     public static final String WINDOW_END_COLUMN = "__window_end";
     private final Supplier<Function<VectorSchemaRoot, VectorSchemaRoot>> operationFactory;
     private final Function<VectorSchemaRoot, VectorSchemaRoot> operation;
@@ -29,6 +65,17 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
         this.operation = operationFactory.get();
     }
 
+    /**
+     * Creates an operator that keeps the rows a predicate accepts.
+     *
+     * <p>The predicate runs once per row; passing rows are copied into a new batch
+     * with the same schema, in their original order. Metadata columns travel with the
+     * rows, so {@code __offset} still identifies the source record after filtering.
+     *
+     * @param allocator the allocator that owns the output batches
+     * @param predicate the row predicate
+     * @return the filter operator
+     */
     public static BuiltinOp filter(BufferAllocator allocator, RowPredicate predicate) {
         Objects.requireNonNull(allocator, "allocator");
         Objects.requireNonNull(predicate, "predicate");
@@ -44,6 +91,18 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
         });
     }
 
+    /**
+     * Creates an operator that projects the named payload columns.
+     *
+     * <p>The output keeps the named columns in the order given, then appends
+     * whichever reserved metadata columns exist in the input — you do not list
+     * metadata columns to keep them. Duplicate names are ignored after the first;
+     * a name the input lacks makes the evaluation throw {@link ColumnarException}.
+     *
+     * @param allocator the allocator that owns the output batches
+     * @param columns the payload columns to keep, in output order
+     * @return the projection operator
+     */
     public static BuiltinOp select(BufferAllocator allocator, String... columns) {
         Objects.requireNonNull(allocator, "allocator");
         var requested = List.copyOf(Arrays.asList(columns));
@@ -58,6 +117,19 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
         });
     }
 
+    /**
+     * Creates an operator that adds or replaces derived columns.
+     *
+     * <p>A derived column whose name matches an existing column replaces it in place,
+     * keeping its position; a new name is appended after the existing columns. Values
+     * are coerced to each column's declared Arrow type with overflow checking;
+     * {@code Utf8} accepts any value via {@code toString()}.
+     *
+     * @param allocator the allocator that owns the output batches
+     * @param columns the columns to derive
+     * @return the with-columns operator
+     * @throws ColumnarException if a derived column uses a reserved metadata name
+     */
     public static BuiltinOp withColumns(BufferAllocator allocator, DerivedColumn... columns) {
         Objects.requireNonNull(allocator, "allocator");
         var derived = List.copyOf(Arrays.asList(columns));
@@ -66,6 +138,23 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
         return new BuiltinOp(() -> batch -> withColumns(batch, derived, allocator));
     }
 
+    /**
+     * Creates a cumulative group-by operator.
+     *
+     * <p>Rows are grouped by the key columns' values and the groups are retained
+     * across every batch processed by the same built topology, so each output batch
+     * is the current cumulative result: key columns first, aggregate columns after,
+     * groups ordered by first appearance. Metadata columns are dropped from the
+     * output unless they are grouped by.
+     *
+     * <p>An unknown key or input column, or an empty key list, makes the evaluation
+     * throw {@link ColumnarException}.
+     *
+     * @param allocator the allocator that owns the output batches
+     * @param keys the payload columns to group by; at least one
+     * @param aggregations the aggregate columns to compute
+     * @return the group-by operator
+     */
     public static BuiltinOp groupBy(
             BufferAllocator allocator, Collection<String> keys, Aggregation... aggregations) {
         Objects.requireNonNull(allocator, "allocator");
@@ -75,7 +164,24 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
                 keyColumns, aggregateColumns, null, null, allocator));
     }
 
-    /** Groups cumulatively into fixed event-time windows using the Kafka timestamp column. */
+    /**
+     * Groups cumulatively into fixed event-time windows using the Kafka timestamp
+     * column.
+     *
+     * <p>Each row is assigned to the fixed window containing its {@code __timestamp};
+     * the output adds {@link #WINDOW_START_COLUMN} and {@link #WINDOW_END_COLUMN} as
+     * epoch milliseconds after the key columns. Closed windows are retained for one
+     * window size past stream time; use
+     * {@link #windowedGroupBy(BufferAllocator, Collection, java.time.Duration, java.time.Duration, Aggregation...)}
+     * for a longer retention.
+     *
+     * @param allocator the allocator that owns the output batches
+     * @param keys the payload columns to group by; at least one
+     * @param windowSize the fixed window size; at least one millisecond
+     * @param aggregations the aggregate columns to compute
+     * @return the windowed group-by operator
+     * @throws IllegalArgumentException if the window is shorter than one millisecond
+     */
     public static BuiltinOp windowedGroupBy(
             BufferAllocator allocator,
             Collection<String> keys,
@@ -89,7 +195,24 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
         return windowedGroupBy(allocator, keys, windowSize, windowSize, aggregations);
     }
 
-    /** Groups into fixed event-time windows and retains closed windows for the supplied duration. */
+    /**
+     * Groups into fixed event-time windows and retains closed windows for the
+     * supplied duration.
+     *
+     * <p>Stream time is the largest {@code __timestamp} seen so far; windows whose
+     * end falls more than the retention behind stream time are pruned from state, and
+     * rows arriving for pruned windows are dropped. Use partition snapshots when
+     * window state must survive a rebalance or restart.
+     *
+     * @param allocator the allocator that owns the output batches
+     * @param keys the payload columns to group by; at least one
+     * @param windowSize the fixed window size; at least one millisecond
+     * @param retention how long closed windows accept late rows; at least the window size
+     * @param aggregations the aggregate columns to compute
+     * @return the windowed group-by operator
+     * @throws IllegalArgumentException if the window is shorter than one millisecond
+     *     or the retention is shorter than the window
+     */
     public static BuiltinOp windowedGroupBy(
             BufferAllocator allocator,
             Collection<String> keys,
@@ -111,16 +234,35 @@ public final class BuiltinOp implements StatefulColumnarProcessor {
                 keyColumns, aggregateColumns, windowMillis, retentionMillis, allocator));
     }
 
+    /**
+     * Applies the operator and forwards exactly one output batch.
+     *
+     * @param context the collector the output batch is forwarded to
+     * @param batch the input batch, owned by the framework
+     */
     @Override
     public void process(ColumnarContext context, VectorSchemaRoot batch) {
         context.forward(operation.apply(batch));
     }
 
+    /**
+     * Serializes the operator's state.
+     *
+     * @return the grouping state for {@code groupBy} operators, or an empty array for
+     *     the stateless operators
+     */
     @Override
     public byte[] snapshot() {
         return operation instanceof SnapshotOperation stateful ? stateful.snapshot() : new byte[0];
     }
 
+    /**
+     * Replaces the operator's state with a previously taken snapshot.
+     *
+     * @param snapshot bytes previously returned by {@link #snapshot()}
+     * @throws ColumnarException if the bytes cannot be restored or a non-empty
+     *     snapshot is restored into a stateless operator
+     */
     @Override
     public void restore(byte[] snapshot) {
         if (operation instanceof SnapshotOperation stateful) {

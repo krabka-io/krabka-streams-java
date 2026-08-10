@@ -10,15 +10,50 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** Stores each partition snapshot in one atomically replaced local file. */
+/**
+ * Stores each partition snapshot in one atomically replaced local file.
+ *
+ * <p>Snapshots live in {@code <directory>/partition-<n>.snapshot}. Saving writes a
+ * temporary file and moves it over the target — atomically where the file system
+ * supports it — so a crash mid-save leaves the previous snapshot intact. The file
+ * format is versioned and validated; a corrupt or truncated file fails loading with
+ * {@link ColumnarException} rather than restoring partial state.
+ *
+ * <p>Use this store when each group member has its own local disk and partitions
+ * return to the same member across restarts, or accept rebuilding state from source
+ * topics after a member change.
+ *
+ * <h2>Example</h2>
+ *
+ * <pre>{@code
+ * var stateStore = new FileColumnarStateStore(Path.of("/var/lib/app/state"));
+ * var runner = ColumnarRunner.group(
+ *     topology, consumer, producer,
+ *     ColumnarErrorPolicy.fail(), stateStore, new ColumnarMetrics());
+ * }</pre>
+ */
 public final class FileColumnarStateStore implements ColumnarStateStore {
     private static final int VERSION = 1;
     private final Path directory;
 
+    /**
+     * Creates a store rooted at a directory.
+     *
+     * <p>The directory is created on the first save; it does not need to exist yet.
+     *
+     * @param directory the directory the snapshot files live in
+     */
     public FileColumnarStateStore(Path directory) {
         this.directory = Objects.requireNonNull(directory, "directory");
     }
 
+    /**
+     * Loads a partition's snapshot file.
+     *
+     * @param partition the logical partition number
+     * @return operator name to snapshot bytes; empty when no file exists
+     * @throws ColumnarException if the file exists but cannot be read or is corrupt
+     */
     @Override
     public Map<String, byte[]> load(int partition) {
         var file = file(partition);
@@ -55,6 +90,13 @@ public final class FileColumnarStateStore implements ColumnarStateStore {
         }
     }
 
+    /**
+     * Saves a partition's snapshots, replacing the previous file atomically.
+     *
+     * @param partition the logical partition number
+     * @param snapshot operator name to snapshot bytes
+     * @throws ColumnarException if the file cannot be written or moved into place
+     */
     @Override
     public void save(int partition, Map<String, byte[]> snapshot) {
         try {

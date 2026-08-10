@@ -1,0 +1,104 @@
+/*
+ * krabka accent overrides for the standard JDK doclet, loaded after the stock
+ * stylesheet via --add-stylesheet. Two mechanisms cover two doclet generations:
+ * JDK 21+ exposes CSS custom properties, so the :root block below restyles it;
+ * JDK 17's doclet predates the variables, so the concrete selectors that follow
+ * repeat the same design. Only colors and fonts are touched, so a doclet that
+ * renames selectors degrades to the stock look instead of breaking layout.
+ */
+
+:root {
+  /* JDK 21+ doclet variables */
+  --navbar-background-color: #211d16;
+  --navbar-text-color: #f5f1e8;
+  --subnav-background-color: #efe9dc;
+  --subnav-link-color: #93300f;
+  --selected-background-color: #c2401c;
+  --selected-text-color: #ffffff;
+  --selected-link-color: #ffffff;
+  --link-color: #93300f;
+  --link-color-active: #c2401c;
+  --title-color: #211d16;
+  --table-header-color: #efe9dc;
+  --odd-row-color: #faf7f0;
+  --code-font-family: "Berkeley Mono", "IBM Plex Mono", ui-monospace,
+    "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
+/* ---- JDK 17 doclet equivalents ---------------------------------------- */
+
+/* Links */
+a:link,
+a:visited {
+  color: #93300f;
+}
+
+a[href]:hover,
+a[href]:focus {
+  color: #c2401c;
+}
+
+/* Top navigation: ink instead of the stock blue */
+.top-nav {
+  background-color: #211d16;
+}
+
+.top-nav a:link,
+.top-nav a:active,
+.top-nav a:visited {
+  color: #f5f1e8;
+}
+
+.top-nav a:hover {
+  color: #ff8a5f;
+}
+
+.nav-bar-cell1-rev {
+  background-color: #c2401c;
+  color: #ffffff;
+}
+
+/* Sub navigation strip */
+.sub-nav {
+  background-color: #efe9dc;
+}
+
+.sub-nav a:link,
+.sub-nav a:visited {
+  color: #93300f;
+}
+
+/* Page titles */
+.title {
+  color: #211d16;
+}
+
+/* Summary table headers and tabs */
+.table-header {
+  background: #efe9dc;
+  color: #211d16;
+}
+
+div.table-tabs > button.active-table-tab {
+  background: #c2401c;
+  color: #ffffff;
+}
+
+div.table-tabs > button.table-tab {
+  background: #211d16;
+  color: #f5f1e8;
+}
+
+/* Index/search result highlight */
+.search-tag-result:target {
+  background-color: #ffe3d6;
+}
+
+/* Code voice */
+code,
+tt,
+pre,
+.snippet-container pre {
+  font-family: "Berkeley Mono", "IBM Plex Mono", ui-monospace, "Cascadia Code",
+    Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}

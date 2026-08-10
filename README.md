@@ -6,7 +6,7 @@ It uses the Apache Kafka Streams API and adds krabka schema registry and Apache 
 The minimum Java version is 17.
 
 ```kotlin
-implementation("io.krabka:krabka-streams:1.1.0")
+implementation("io.krabka:krabka-streams:1.1.1")
 ```
 
 ## Modules
@@ -24,7 +24,8 @@ on your classpath at the version this release pins.
 
 ## Documentation
 
-Full documentation is in [docs/](docs/index.md).
+Full documentation is in [docs/](docs/index.md). The API reference for the latest
+release is published at <https://krabka-io.github.io/krabka-streams-java/>.
 
 | Document                                         | Contents                                                   |
 | ------------------------------------------------ | ---------------------------------------------------------- |
@@ -85,7 +86,7 @@ To consume the source directly from another Bazel module, add this to its
 `MODULE.bazel` (replace the commit with the revision you want to pin):
 
 ```starlark
-bazel_dep(name = "krabka_streams_java", version = "1.1.0")
+bazel_dep(name = "krabka_streams_java", version = "1.1.1")
 git_override(
     module_name = "krabka_streams_java",
     remote = "https://github.com/krabka-io/krabka-streams-java.git",
@@ -157,7 +158,7 @@ See [Testing](docs/testing.md).
 
 ## Status
 
-The current version is `1.1.0`. See [PARITY.md](PARITY.md) for the parity checklist,
+The current version is `1.1.1`. See [PARITY.md](PARITY.md) for the parity checklist,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [runtime constraints](docs/limitations.md).
 
 ## License

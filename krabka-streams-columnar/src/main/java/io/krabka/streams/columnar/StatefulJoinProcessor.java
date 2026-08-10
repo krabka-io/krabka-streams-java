@@ -12,6 +12,11 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
+/**
+ * Executes a {@link ColumnarJoin}: retains both sides' rows per logical partition as
+ * serialized Arrow batches, matches keys within the event-time window, prunes rows
+ * that age past it, and snapshots its retained batches for restore.
+ */
 final class StatefulJoinProcessor implements StatefulColumnarProcessor {
     private static final int SNAPSHOT_VERSION = 1;
     private final ColumnarJoin join;
