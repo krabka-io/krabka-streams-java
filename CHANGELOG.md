@@ -18,7 +18,8 @@
   regardless of the skip or dead-letter error policy, so transient conditions retry
   instead of discarding healthy batches.
 - Syntax-highlight every Javadoc code example, in the module javadoc jars and on the
-  documentation site, with a self-contained highlighter themed to the site palette.
+  documentation site, by running Javadoc with the JDK 25 tool and its
+  `--syntax-highlight` option, retinted to the site palette.
 
 ## 1.1.1 - 2026-08-10
 

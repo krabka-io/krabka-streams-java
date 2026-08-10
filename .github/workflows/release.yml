@@ -19,7 +19,11 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          # 25 supplies the javadoc tool for --syntax-highlight; 17, listed last,
+          # stays the default JAVA_HOME that Gradle and the compile toolchain use.
+          java-version: |
+            25
+            17
       - uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazelisk-cache: true

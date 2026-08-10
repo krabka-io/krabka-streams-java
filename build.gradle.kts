@@ -6,6 +6,7 @@ import org.gradle.jvm.tasks.Jar
 
 plugins {
     `java-platform`
+    `jvm-toolchains`
     `maven-publish`
     signing
 }
@@ -30,11 +31,10 @@ val automaticModuleNames = mapOf(
     "krabka-streams-test-utils" to "io.krabka.streams.test.utils",
 )
 
-// The JDK 17 doclet has no --add-script, so the syntax highlighter is inlined into
-// every page through the -bottom option, which --allow-script-in-comments permits.
-val javadocHighlightScript = providers.fileContents(
-    layout.projectDirectory.file("docs/site/javadoc-highlight.js"),
-).asText.map { script -> "<script>\n$script</script>" }
+// Compilation stays on the Java 17 toolchain, but Javadoc runs with JDK 25's tool:
+// its doclet adds --syntax-highlight (JDK-8348282), which bundles highlight.js and
+// highlights {@snippet} and <pre>{@code} fragments without any custom scripting.
+val javadocLanguageVersion = JavaLanguageVersion.of(25)
 
 subprojects {
     group = rootProject.group
@@ -61,16 +61,17 @@ subprojects {
     }
 
     tasks.withType<Javadoc>().configureEach {
+        javadocTool.set(the<JavaToolchainService>().javadocToolFor {
+            languageVersion.set(javadocLanguageVersion)
+        })
         options.encoding = "UTF-8"
         (options as StandardJavadocDocletOptions).apply {
             addBooleanOption("Xdoclint:all", true)
             addBooleanOption("Werror", true)
-            addBooleanOption("-allow-script-in-comments", true)
+            addBooleanOption("-syntax-highlight", true)
             addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
-            bottom = javadocHighlightScript.get()
         }
         inputs.file(rootProject.file("docs/site/javadoc-theme.css"))
-        inputs.file(rootProject.file("docs/site/javadoc-highlight.js"))
     }
 
     tasks.withType<Jar>().configureEach {
@@ -307,6 +308,9 @@ dependencies {
 val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
     description = "Generates one Javadoc run over every module's public API."
     group = documentationGroup
+    javadocTool.set(the<JavaToolchainService>().javadocToolFor {
+        languageVersion.set(javadocLanguageVersion)
+    })
     setDestinationDir(layout.buildDirectory.dir("docs/aggregate-javadoc").get().asFile)
     subprojects.forEach { subproject ->
         source(subproject.extensions.getByType<SourceSetContainer>()["main"].allJava)
@@ -320,7 +324,7 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         windowTitle = "krabka streams for Java $version API"
         addBooleanOption("Xdoclint:all", true)
         addBooleanOption("Werror", true)
-        addBooleanOption("-allow-script-in-comments", true)
+        addBooleanOption("-syntax-highlight", true)
         addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
         overview = rootProject.file("docs/site/overview.html").absolutePath
         group("Kafka Streams", "io.krabka.streams")
@@ -329,12 +333,11 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         group("Avro and Protobuf Arrow bridges", "io.krabka.streams.columnar.schema")
         group("Test utilities", "io.krabka.streams.test")
         bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +
-            " is licensed under the Apache License 2.0." + javadocHighlightScript.get()
+            " is licensed under the Apache License 2.0."
     }
     inputs.files(
         rootProject.file("docs/site/javadoc-theme.css"),
         rootProject.file("docs/site/overview.html"),
-        rootProject.file("docs/site/javadoc-highlight.js"),
     )
 }
 

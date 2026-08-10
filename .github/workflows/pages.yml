@@ -21,7 +21,11 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          # 25 supplies the javadoc tool for --syntax-highlight; 17, listed last,
+          # stays the default JAVA_HOME that Gradle and the compile toolchain use.
+          java-version: |
+            25
+            17
       - uses: gradle/actions/setup-gradle@v6
       - name: Build the documentation site
         run: ./gradlew javadocSite

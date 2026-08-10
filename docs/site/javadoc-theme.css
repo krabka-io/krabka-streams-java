@@ -103,22 +103,24 @@ pre,
     Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
 
-/* Syntax highlighting tokens, produced by javadoc-highlight.js */
-.hl-keyword {
+/* Syntax highlighting: javadoc --syntax-highlight bundles highlight.js with its
+ * own stylesheet; these overrides retint the common tokens to the krabka palette. */
+.hljs-keyword,
+.hljs-literal {
   color: #93300f;
   font-weight: 600;
 }
 
-.hl-string {
+.hljs-string {
   color: #c2401c;
 }
 
-.hl-comment {
+.hljs-comment {
   color: #5c5546;
   font-style: italic;
 }
 
-.hl-annotation,
-.hl-number {
+.hljs-meta,
+.hljs-number {
   color: #8a6d1f;
 }
