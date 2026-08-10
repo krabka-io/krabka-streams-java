@@ -18,6 +18,7 @@
 ./gradlew :krabka-streams-columnar:test      # one module
 ./gradlew javadoc                            # javadoc for every module
 ./gradlew javadocJar                         # package every module's javadoc
+./gradlew javadocSite                        # assemble the GitHub Pages documentation site
 ./gradlew clean
 ./gradlew publishToMavenLocal                # install into ~/.m2 for local consumption
 bazel build //...                            # compile every module
@@ -166,7 +167,7 @@ different day than the bump:
 
 ## Continuous integration
 
-Three workflows live in `.github/workflows`.
+Four workflows live in `.github/workflows`.
 
 ### `ci.yml`
 
@@ -193,6 +194,27 @@ Timeout: 15 minutes.
 
 These two jobs are the reference for running the services locally. The listener,
 feature, and replication-factor flags are easy to get subtly wrong.
+
+### `pages.yml`
+
+Runs on pushes to `main` and manually through `workflow_dispatch`, publishing the
+documentation site to GitHub Pages at
+<https://krabka-io.github.io/krabka-streams-java/>.
+
+The `build` job runs `./gradlew javadocSite`, which assembles `build/javadoc-site`:
+the landing page from `docs/site/index.html` (with `@VERSION@` replaced by the
+current version) plus one aggregated Javadoc run over every module under `api/`.
+Aggregation makes cross-module references link and gives the whole API one search
+index; `docs/site/javadoc-theme.css` restyles the standard doclet and
+`docs/site/overview.html` supplies the overview text. The `deploy` job publishes
+the uploaded artifact with `actions/deploy-pages`; it alone holds the
+`pages: write` and `id-token: write` permissions, and a `pages` concurrency group
+keeps deployments sequential without cancelling one in flight.
+
+Pages is configured with the "GitHub Actions" source. That is a one-time repository
+setting; re-enable it with
+`gh api repos/krabka-io/krabka-streams-java/pages -X POST -f build_type=workflow`
+if the repository is ever recreated.
 
 ### `release.yml`
 

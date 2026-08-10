@@ -57,7 +57,9 @@ subprojects {
         (options as StandardJavadocDocletOptions).apply {
             addBooleanOption("Xdoclint:all", true)
             addBooleanOption("Werror", true)
+            addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
         }
+        inputs.file(rootProject.file("docs/site/javadoc-theme.css"))
     }
 
     tasks.withType<Jar>().configureEach {
@@ -249,6 +251,94 @@ tasks.register<Exec>("lintMarkdown") {
     workingDir = layout.projectDirectory.asFile
     commandLine(npmCommand, "run", "lint:markdown")
     inputs.files(markdownInputs)
+}
+
+// Documentation site. `aggregateJavadoc` runs one Javadoc pass over every module so
+// cross-module references link and one search index covers the whole API;
+// `javadocSite` wraps it with the landing page under docs/site/ for GitHub Pages.
+val documentationGroup = "documentation"
+
+// The aggregate Javadoc classpath is a root-level configuration because resolving
+// another project's compileClasspath from here is unsafe under the configuration
+// cache. Runtime usage carries every module's api and implementation dependencies.
+repositories {
+    mavenCentral()
+}
+
+val aggregateJavadocClasspath: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    attributes {
+        attribute(
+            org.gradle.api.attributes.Usage.USAGE_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Usage::class.java, org.gradle.api.attributes.Usage.JAVA_RUNTIME),
+        )
+        attribute(
+            org.gradle.api.attributes.Category.CATEGORY_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Category::class.java, org.gradle.api.attributes.Category.LIBRARY),
+        )
+        attribute(
+            org.gradle.api.attributes.LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+            objects.named(
+                org.gradle.api.attributes.LibraryElements::class.java,
+                org.gradle.api.attributes.LibraryElements.JAR,
+            ),
+        )
+    }
+}
+
+dependencies {
+    subprojects.forEach { subproject ->
+        aggregateJavadocClasspath(project(subproject.path))
+    }
+}
+
+val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
+    description = "Generates one Javadoc run over every module's public API."
+    group = documentationGroup
+    setDestinationDir(layout.buildDirectory.dir("docs/aggregate-javadoc").get().asFile)
+    subprojects.forEach { subproject ->
+        source(subproject.extensions.getByType<SourceSetContainer>()["main"].allJava)
+    }
+    classpath = aggregateJavadocClasspath
+    title = "krabka streams for Java $version"
+    options.encoding = "UTF-8"
+    (options as StandardJavadocDocletOptions).apply {
+        docEncoding = "UTF-8"
+        charSet = "UTF-8"
+        windowTitle = "krabka streams for Java $version API"
+        addBooleanOption("Xdoclint:all", true)
+        addBooleanOption("Werror", true)
+        addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
+        overview = rootProject.file("docs/site/overview.html").absolutePath
+        group("Kafka Streams", "io.krabka.streams")
+        group("Schema registry and serdes", "io.krabka.streams.schema")
+        group("Columnar processing", "io.krabka.streams.columnar")
+        group("Test utilities", "io.krabka.streams.test")
+        bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +
+            " is licensed under the Apache License 2.0."
+    }
+    inputs.files(
+        rootProject.file("docs/site/javadoc-theme.css"),
+        rootProject.file("docs/site/overview.html"),
+    )
+}
+
+tasks.register<Sync>("javadocSite") {
+    description = "Assembles the static documentation site for GitHub Pages."
+    group = documentationGroup
+    val siteVersion = version.toString()
+    into(layout.buildDirectory.dir("javadoc-site"))
+    from(aggregateJavadoc) {
+        into("api")
+    }
+    from(layout.projectDirectory.file("docs/site/index.html")) {
+        filter { line -> line.replace("@VERSION@", siteVersion) }
+    }
+    // GitHub Pages serves the artifact as-is, but .nojekyll keeps any future
+    // Jekyll-based serving from hiding the doclet's underscore-prefixed files.
+    doLast {
+        destinationDir.resolve(".nojekyll").writeText("")
+    }
 }
 
 // Version bumping. `bumpPatch`, `bumpMinor`, and `bumpMajor` rewrite the version in

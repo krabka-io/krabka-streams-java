@@ -24,7 +24,8 @@ on your classpath at the version this release pins.
 
 ## Documentation
 
-Full documentation is in [docs/](docs/index.md).
+Full documentation is in [docs/](docs/index.md). The API reference for the latest
+release is published at <https://krabka-io.github.io/krabka-streams-java/>.
 
 | Document                                         | Contents                                                   |
 | ------------------------------------------------ | ---------------------------------------------------------- |
