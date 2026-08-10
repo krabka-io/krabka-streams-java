@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0 - 2026-08-10
+
+- Add `krabka-streams-columnar-schema`, connecting the schema registry serdes to the
+  columnar runtime: `AvroBatchCodec` and `ProtobufBatchCodec` decode registry-framed
+  topics into Arrow batches whose columns follow the record schema — structs, lists,
+  maps, decimals, and timestamps as native Arrow types — and encode processed batches
+  back; `AvroRowBridge`, `ProtobufRowBridge`, `AvroArrowSchemas`, and
+  `ProtobufArrowSchemas` expose the conversion for composition.
+- Derive every bridge's Arrow schema once, at construction, from the fixed reader
+  schema or message descriptor, so mid-stream writer schema evolution never changes
+  the columns.
+- Add the public `ArrowValues` helpers so custom row bridges and processors reuse the
+  engine's type-coercing vector reads and writes, and extend the supported Arrow
+  types with `Time`, `FixedSizeBinary`, and exact unsigned 64-bit reads.
+- Rethrow retriable failures, such as a pending schema fetch, from the group runner
+  regardless of the skip or dead-letter error policy, so transient conditions retry
+  instead of discarding healthy batches.
+
 ## 1.1.1 - 2026-08-10
 
 - Document every public type, member, and record component with full Javadoc, and add

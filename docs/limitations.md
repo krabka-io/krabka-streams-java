@@ -1,6 +1,6 @@
 # Runtime constraints
 
-The project-owned limitations listed for `1.1.1` have been resolved. The remaining
+The project-owned limitations listed for `1.2.0` have been resolved. The remaining
 constraints come from the runtime or the services the library interoperates with.
 
 ## Kafka Streams broker support

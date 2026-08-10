@@ -6,7 +6,7 @@ without a broker or a registry. It depends on `krabka-streams`,
 `kafka-streams-test-utils`, so one test dependency covers the whole surface.
 
 ```kotlin
-testImplementation("io.krabka:krabka-streams-test-utils:1.1.1")
+testImplementation("io.krabka:krabka-streams-test-utils:1.2.0")
 ```
 
 Any test source set that touches Arrow needs the JVM flag:

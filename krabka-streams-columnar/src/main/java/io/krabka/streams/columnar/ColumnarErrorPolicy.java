@@ -12,6 +12,12 @@ import java.util.Objects;
  * forwards each input record to the dead-letter topic with {@code krabka.error.*} and
  * {@code krabka.source.*} headers describing the failure and origin.
  *
+ * <p>A {@link org.apache.kafka.common.errors.RetriableException} — thrown directly
+ * or anywhere in the failure's cause chain, as with the schema cache's
+ * {@code SchemaFetchPendingException} wrapped by a serde — is always rethrown
+ * regardless of the policy: a transient condition clears on retry, so skipping or
+ * dead-lettering the batch would discard healthy records.
+ *
  * <h2>Example</h2>
  *
  * <pre>{@code

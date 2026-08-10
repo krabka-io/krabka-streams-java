@@ -160,6 +160,48 @@ That is why the batch in `RowCodec` with `JsonRowBridge<>(String.class)` has the
 A row that cannot be converted back throws
 `cannot convert Arrow row 2 to com.example.Order`.
 
+### Registry-backed codecs, for Avro and Protobuf topics
+
+`krabka-streams-columnar-schema` connects the schema registry serdes to columnar
+topologies. `AvroBatchCodec` and `ProtobufBatchCodec` implement `BatchCodec`, so they
+plug into `addSource` and `addSink` directly, and their columns follow the record
+schema instead of JSON text: nested records become `Struct`, arrays and repeated
+fields `List`, maps `Map`, and decimals and timestamps their native Arrow types.
+
+```java
+var cache = new SchemaCache(new KrabkaSchemaRegistryClient(registryUri));
+var codec = AvroBatchCodec.generic(orderSchema, cache, allocator);
+codec.registerSubject("orders");
+cache.prewarm().join();
+
+var topology = new ColumnarTopology(allocator);
+var source = topology.addSource("orders", List.of("orders"), codec);
+```
+
+The Arrow schema derives from the fixed reader schema (or message descriptor) once,
+at construction — `codec.arrowSchema()` returns it. Records written with other
+registered writer schemas are resolved onto that reader view by the embedded serde,
+so a schema change mid-stream never changes the columns, and an unknown writer schema
+ID surfaces as the cache's retriable `SchemaFetchPendingException`, which the group
+runner rethrows instead of skipping or dead-lettering.
+
+A few shapes have no finite or faithful Arrow form and fall back, tagged with field
+metadata so the write-back path can reverse them: a multi-branch Avro union becomes a
+struct with one nullable child per branch (`krabka.avro.union`), a recursive Avro
+record becomes its JSON text (`krabka.json`), and a recursive Protobuf message — or
+the dynamic `google.protobuf.Struct`, `Value`, and `ListValue` — becomes its
+canonical Protobuf JSON text (`krabka.json` plus `krabka.proto.message` naming the
+type). Enums become `Utf8` symbol names,
+Protobuf `uint64` stays exact as an unsigned 64-bit column, and
+`google.protobuf.Timestamp` becomes a UTC microsecond timestamp with sub-microsecond
+nanos truncated.
+
+`AvroRowBridge` and `ProtobufRowBridge` expose the same conversion through the
+`RowBridge` interface for composition with your own serde or `GzipBatchCodec`, and
+`AvroArrowSchemas` and `ProtobufArrowSchemas` translate schemas without touching
+data. See the [API reference](api-reference.md#krabka-streams-columnar-schema) for
+the full surface.
+
 ### ArrowIpcSerde
 
 A plain Kafka `Serde<VectorSchemaRoot>` over the Arrow IPC stream format. `BlobCodec`

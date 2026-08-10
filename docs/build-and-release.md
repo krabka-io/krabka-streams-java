@@ -101,7 +101,7 @@ declare dependencies and module-specific test flags.
 | Setting                  | Value                                          | Where                   |
 | ------------------------ | ---------------------------------------------- | ----------------------- |
 | Group                    | `io.krabka`                                    | root build              |
-| Version                  | `1.1.1`                                        | `gradle.properties`     |
+| Version                  | `1.2.0`                                        | `gradle.properties`     |
 | Java toolchain           | 17                                             | root build              |
 | Compiler                 | `--release 17`, UTF-8, `-Xlint:all`, `-Werror` | root build              |
 | Javadoc                  | UTF-8, `Xdoclint:all`, `-Werror`               | root build              |

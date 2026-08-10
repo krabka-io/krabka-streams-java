@@ -12,6 +12,7 @@ java_library(
     exports = [
         "//krabka-streams",
         "//krabka-streams-columnar",
+        "//krabka-streams-columnar-schema",
         "//krabka-streams-schema-serde",
         "@krabka_streams_maven//:org_apache_kafka_kafka_streams_test_utils",
     ],

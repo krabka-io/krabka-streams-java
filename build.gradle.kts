@@ -18,6 +18,7 @@ val moduleDescriptions = mapOf(
     "krabka-streams" to "Apache Kafka Streams API and krabka defaults",
     "krabka-streams-schema-serde" to "Schema registry serdes for krabka streams",
     "krabka-streams-columnar" to "Apache Arrow batch processing for krabka streams",
+    "krabka-streams-columnar-schema" to "Avro and Protobuf Arrow bridges for krabka streams",
     "krabka-streams-test-utils" to "Test helpers for krabka streams",
 )
 
@@ -25,6 +26,7 @@ val automaticModuleNames = mapOf(
     "krabka-streams" to "io.krabka.streams",
     "krabka-streams-schema-serde" to "io.krabka.streams.schema.serde",
     "krabka-streams-columnar" to "io.krabka.streams.columnar",
+    "krabka-streams-columnar-schema" to "io.krabka.streams.columnar.schema",
     "krabka-streams-test-utils" to "io.krabka.streams.test.utils",
 )
 
@@ -146,6 +148,7 @@ dependencies {
         api(project(":krabka-streams"))
         api(project(":krabka-streams-schema-serde"))
         api(project(":krabka-streams-columnar"))
+        api(project(":krabka-streams-columnar-schema"))
         api(project(":krabka-streams-test-utils"))
     }
 }
@@ -313,6 +316,7 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         group("Kafka Streams", "io.krabka.streams")
         group("Schema registry and serdes", "io.krabka.streams.schema")
         group("Columnar processing", "io.krabka.streams.columnar")
+        group("Avro and Protobuf Arrow bridges", "io.krabka.streams.columnar.schema")
         group("Test utilities", "io.krabka.streams.test")
         bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +
             " is licensed under the Apache License 2.0."
