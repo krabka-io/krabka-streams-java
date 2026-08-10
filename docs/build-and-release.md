@@ -205,8 +205,11 @@ The `build` job runs `./gradlew javadocSite`, which assembles `build/javadoc-sit
 the landing page from `docs/site/index.html` (with `@VERSION@` replaced by the
 current version) plus one aggregated Javadoc run over every module under `api/`.
 Aggregation makes cross-module references link and gives the whole API one search
-index; `docs/site/javadoc-theme.css` restyles the standard doclet and
-`docs/site/overview.html` supplies the overview text. The `deploy` job publishes
+index; `docs/site/javadoc-theme.css` restyles the standard doclet,
+`docs/site/overview.html` supplies the overview text, and
+`docs/site/javadoc-highlight.js` — inlined into every page through the `-bottom`
+option, because the JDK 17 doclet has no `--add-script` — syntax-highlights the
+`{@code}` examples client side. The `deploy` job publishes
 the uploaded artifact with `actions/deploy-pages`; it alone holds the
 `pages: write` and `id-token: write` permissions, and a `pages` concurrency group
 keeps deployments sequential without cancelling one in flight.

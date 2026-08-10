@@ -102,3 +102,23 @@ pre,
   font-family: "Berkeley Mono", "IBM Plex Mono", ui-monospace, "Cascadia Code",
     Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
+
+/* Syntax highlighting tokens, produced by javadoc-highlight.js */
+.hl-keyword {
+  color: #93300f;
+  font-weight: 600;
+}
+
+.hl-string {
+  color: #c2401c;
+}
+
+.hl-comment {
+  color: #5c5546;
+  font-style: italic;
+}
+
+.hl-annotation,
+.hl-number {
+  color: #8a6d1f;
+}

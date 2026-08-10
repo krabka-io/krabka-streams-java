@@ -17,6 +17,8 @@
 - Rethrow retriable failures, such as a pending schema fetch, from the group runner
   regardless of the skip or dead-letter error policy, so transient conditions retry
   instead of discarding healthy batches.
+- Syntax-highlight every Javadoc code example, in the module javadoc jars and on the
+  documentation site, with a self-contained highlighter themed to the site palette.
 
 ## 1.1.1 - 2026-08-10
 

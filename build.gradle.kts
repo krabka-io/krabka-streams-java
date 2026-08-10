@@ -30,6 +30,12 @@ val automaticModuleNames = mapOf(
     "krabka-streams-test-utils" to "io.krabka.streams.test.utils",
 )
 
+// The JDK 17 doclet has no --add-script, so the syntax highlighter is inlined into
+// every page through the -bottom option, which --allow-script-in-comments permits.
+val javadocHighlightScript = providers.fileContents(
+    layout.projectDirectory.file("docs/site/javadoc-highlight.js"),
+).asText.map { script -> "<script>\n$script</script>" }
+
 subprojects {
     group = rootProject.group
     version = rootProject.version
@@ -59,9 +65,12 @@ subprojects {
         (options as StandardJavadocDocletOptions).apply {
             addBooleanOption("Xdoclint:all", true)
             addBooleanOption("Werror", true)
+            addBooleanOption("-allow-script-in-comments", true)
             addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
+            bottom = javadocHighlightScript.get()
         }
         inputs.file(rootProject.file("docs/site/javadoc-theme.css"))
+        inputs.file(rootProject.file("docs/site/javadoc-highlight.js"))
     }
 
     tasks.withType<Jar>().configureEach {
@@ -311,6 +320,7 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         windowTitle = "krabka streams for Java $version API"
         addBooleanOption("Xdoclint:all", true)
         addBooleanOption("Werror", true)
+        addBooleanOption("-allow-script-in-comments", true)
         addFileOption("-add-stylesheet", rootProject.file("docs/site/javadoc-theme.css"))
         overview = rootProject.file("docs/site/overview.html").absolutePath
         group("Kafka Streams", "io.krabka.streams")
@@ -319,11 +329,12 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         group("Avro and Protobuf Arrow bridges", "io.krabka.streams.columnar.schema")
         group("Test utilities", "io.krabka.streams.test")
         bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +
-            " is licensed under the Apache License 2.0."
+            " is licensed under the Apache License 2.0." + javadocHighlightScript.get()
     }
     inputs.files(
         rootProject.file("docs/site/javadoc-theme.css"),
         rootProject.file("docs/site/overview.html"),
+        rootProject.file("docs/site/javadoc-highlight.js"),
     )
 }
 
