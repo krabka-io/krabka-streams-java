@@ -9,10 +9,23 @@ bazel_dep(name = "toolchains_buildbuddy", version = "0.0.4")
 
 bazel_dep(name = "aspect_rules_js", version = "3.4.0", dev_dependency = True)
 
+# A hermetic C++ toolchain rather than the host's.
+#
+# Nothing here is native, but the Java rules still resolve a C++ toolchain, and
+# that resolution was landing on `local_config_cc` -- the compiler Bazel found
+# on the machine. The BuildBuddy toolchain below does not cover it: its
+# constraints match the remote execution platform, so a local build fell
+# through to whatever the host carried.
+#
+# Registered after BuildBuddy's so remote execution keeps the toolchain built
+# for its image, and everything else gets this one.
+bazel_dep(name = "llvm", version = "0.8.18")
+
 buildbuddy = use_extension("@toolchains_buildbuddy//:extensions.bzl", "buildbuddy")
 
 register_toolchains(
     "@toolchains_buildbuddy//toolchains/cc:ubuntu_gcc_x86_64",
+    "@llvm//toolchain:all",
 )
 
 # The documentation targets run javadoc from a hermetic JDK 25, whose doclet has
