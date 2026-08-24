@@ -1,5 +1,7 @@
 package io.krabka.streams.columnar;
 
+import io.krabka.streams.columnar.barrier.BarrierAlignment;
+import io.krabka.streams.columnar.barrier.BarrierCut;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -8,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -191,13 +194,36 @@ public final class ColumnarRunner {
             Duration pollTimeout,
             ColumnarErrorPolicy errorPolicy,
             ColumnarMetrics metrics) {
-        var poll = processPoll(topology, consumer, pollTimeout, errorPolicy, metrics);
+        var poll = runCycle(
+                topology,
+                consumer,
+                producer,
+                pollTimeout,
+                errorPolicy,
+                metrics,
+                null,
+                ColumnarStateStore.none());
+        return nextOffsets(poll.offsets());
+    }
+
+    private static ProcessedPoll runCycle(
+            BuiltColumnarTopology topology,
+            Consumer<byte[], byte[]> consumer,
+            Producer<byte[], byte[]> producer,
+            Duration pollTimeout,
+            ColumnarErrorPolicy errorPolicy,
+            ColumnarMetrics metrics,
+            BarrierCut pendingCut,
+            ColumnarStateStore stateStore) {
+        var poll = processPoll(topology, consumer, pollTimeout, errorPolicy, metrics, pendingCut);
         try {
             sendAsync(poll.outputs(), producer).join();
+            snapshotAtCut(topology, consumer, stateStore, poll.firedCut());
             if (!poll.offsets().isEmpty()) {
                 consumer.commitSync(poll.offsets());
             }
-            return nextOffsets(poll.offsets());
+            poll.held().forEach(consumer::seek);
+            return poll;
         } catch (RuntimeException error) {
             poll.rollback();
             throw error;
@@ -260,16 +286,39 @@ public final class ColumnarRunner {
             Duration pollTimeout,
             ColumnarErrorPolicy errorPolicy,
             ColumnarMetrics metrics) {
+        var poll = runCycleTransactional(
+                topology,
+                consumer,
+                producer,
+                pollTimeout,
+                errorPolicy,
+                metrics,
+                null,
+                ColumnarStateStore.none());
+        return nextOffsets(poll.offsets());
+    }
+
+    private static ProcessedPoll runCycleTransactional(
+            BuiltColumnarTopology topology,
+            Consumer<byte[], byte[]> consumer,
+            Producer<byte[], byte[]> producer,
+            Duration pollTimeout,
+            ColumnarErrorPolicy errorPolicy,
+            ColumnarMetrics metrics,
+            BarrierCut pendingCut,
+            ColumnarStateStore stateStore) {
         producer.beginTransaction();
         ProcessedPoll poll = null;
         try {
-            poll = processPoll(topology, consumer, pollTimeout, errorPolicy, metrics);
+            poll = processPoll(topology, consumer, pollTimeout, errorPolicy, metrics, pendingCut);
             sendAsync(poll.outputs(), producer).join();
             if (!poll.offsets().isEmpty()) {
                 producer.sendOffsetsToTransaction(poll.offsets(), consumer.groupMetadata());
             }
+            snapshotAtCut(topology, consumer, stateStore, poll.firedCut());
             producer.commitTransaction();
-            return nextOffsets(poll.offsets());
+            poll.held().forEach(consumer::seek);
+            return poll;
         } catch (RuntimeException error) {
             producer.abortTransaction();
             if (poll != null) {
@@ -277,6 +326,26 @@ public final class ColumnarRunner {
             }
             throw error;
         }
+    }
+
+    private static void snapshotAtCut(
+            BuiltColumnarTopology topology,
+            Consumer<byte[], byte[]> consumer,
+            ColumnarStateStore stateStore,
+            BarrierCut cut) {
+        if (cut == null) {
+            return;
+        }
+        logicalPartitions(consumer).forEach(partition ->
+                stateStore.save(partition, cut.epoch(), topology.snapshotPartition(partition)));
+    }
+
+    private static List<Integer> logicalPartitions(Consumer<byte[], byte[]> consumer) {
+        return consumer.assignment().stream()
+                .map(TopicPartition::partition)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     /**
@@ -390,6 +459,39 @@ public final class ColumnarRunner {
             ColumnarErrorPolicy errorPolicy,
             ColumnarStateStore stateStore,
             ColumnarMetrics metrics) {
+        return group(topology, consumer, producer, errorPolicy, stateStore, metrics, null);
+    }
+
+    /**
+     * Creates a group runner that aligns its work on a barrier group's cuts.
+     *
+     * <p>Behaves as the six-argument overload, and additionally reads the barrier
+     * group's cuts from {@code __barrier_state}. Records at or above a partition's
+     * marker offset wait for the next cycle, and the partition pauses until every
+     * assigned partition reaches the cut. The runner then snapshots each owned
+     * partition under the cut's epoch, commits the cut offsets, and calls the
+     * alignment's listener. {@link GroupRunner#restoreToEpoch} and
+     * {@link GroupRunner#restoreToLatestCut} read such a snapshot back and seek every
+     * input to the cut.
+     *
+     * @param topology the topology to build and run; the runner owns the built form
+     * @param consumer the consumer the runner polls; it is subscribed to the
+     *     topology's source topics
+     * @param producer the producer output records are sent with
+     * @param errorPolicy what to do with a partition whose processing fails
+     * @param stateStore where operator snapshots are loaded from and saved to
+     * @param metrics the counters the runner records observations to
+     * @param barrier the barrier group to align on, or null for no alignment
+     * @return the runner; close it to save state and release the built topology
+     */
+    public static GroupRunner group(
+            ColumnarTopology topology,
+            Consumer<byte[], byte[]> consumer,
+            Producer<byte[], byte[]> producer,
+            ColumnarErrorPolicy errorPolicy,
+            ColumnarStateStore stateStore,
+            ColumnarMetrics metrics,
+            BarrierAlignment barrier) {
         Objects.requireNonNull(topology, "topology");
         var runner = new GroupRunner(
                 topology.build(),
@@ -397,7 +499,8 @@ public final class ColumnarRunner {
                 Objects.requireNonNull(producer, "producer"),
                 Objects.requireNonNull(errorPolicy, "errorPolicy"),
                 Objects.requireNonNull(stateStore, "stateStore"),
-                Objects.requireNonNull(metrics, "metrics"));
+                Objects.requireNonNull(metrics, "metrics"),
+                barrier);
         consumer.subscribe(topology.sourceTopics(), runner);
         return runner;
     }
@@ -407,19 +510,33 @@ public final class ColumnarRunner {
             Consumer<byte[], byte[]> consumer,
             Duration pollTimeout,
             ColumnarErrorPolicy errorPolicy,
-            ColumnarMetrics metrics) {
+            ColumnarMetrics metrics,
+            BarrierCut pendingCut) {
         Objects.requireNonNull(topology, "topology");
         Objects.requireNonNull(consumer, "consumer");
         var polled = consumer.poll(pollTimeout);
         var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
+        var held = new HashMap<TopicPartition, Long>();
         var byPartition = new java.util.TreeMap<Integer, Map<String, List<ConsumedRecord>>>();
         for (var topicPartition : polled.partitions()) {
-            var records = polled.records(topicPartition).stream().map(ColumnarRunner::consumed).toList();
-            byPartition.computeIfAbsent(topicPartition.partition(), ignored -> new HashMap<>())
-                    .put(topicPartition.topic(), records);
-            offsets.put(topicPartition, new OffsetAndMetadata(
-                    Math.addExact(polled.records(topicPartition).get(records.size() - 1).offset(), 1)));
+            var fetched = polled.records(topicPartition).stream().map(ColumnarRunner::consumed).toList();
+            long nextOffset = Math.addExact(fetched.get(fetched.size() - 1).offset(), 1);
+            var records = fetched;
+            if (pendingCut != null) {
+                records = pendingCut.recordsBefore(topicPartition, fetched);
+                if (records.size() < fetched.size()) {
+                    long cutOffset = pendingCut.offset(topicPartition).orElseThrow();
+                    held.put(topicPartition, cutOffset);
+                    nextOffset = cutOffset;
+                }
+            }
+            if (!records.isEmpty()) {
+                byPartition.computeIfAbsent(topicPartition.partition(), ignored -> new HashMap<>())
+                        .put(topicPartition.topic(), records);
+            }
+            offsets.put(topicPartition, new OffsetAndMetadata(nextOffset));
         }
+        var firedCut = atCut(consumer, pendingCut) ? pendingCut : null;
 
         var outputs = new ArrayList<ProducedToTopic>();
         var prior = new HashMap<Integer, PriorState>();
@@ -453,11 +570,26 @@ public final class ColumnarRunner {
                     metrics.recordFailure(inputCount, deadLetters, System.nanoTime() - started);
                 }
             }
-            return new ProcessedPoll(topology, Map.copyOf(offsets), List.copyOf(outputs), Map.copyOf(prior));
+            return new ProcessedPoll(
+                    topology,
+                    Map.copyOf(offsets),
+                    List.copyOf(outputs),
+                    Map.copyOf(prior),
+                    Map.copyOf(held),
+                    firedCut);
         } catch (RuntimeException error) {
             prior.forEach((partition, state) -> restore(topology, partition, state));
             throw error;
         }
+    }
+
+    private static boolean atCut(Consumer<byte[], byte[]> consumer, BarrierCut cut) {
+        if (cut == null) {
+            return false;
+        }
+        var assignment = consumer.assignment();
+        return !assignment.isEmpty()
+                && assignment.stream().allMatch(partition -> cut.reached(partition, consumer.position(partition)));
     }
 
     private static boolean retriable(Throwable error) {
@@ -517,7 +649,9 @@ public final class ColumnarRunner {
             BuiltColumnarTopology topology,
             Map<TopicPartition, OffsetAndMetadata> offsets,
             List<ProducedToTopic> outputs,
-            Map<Integer, PriorState> prior) {
+            Map<Integer, PriorState> prior,
+            Map<TopicPartition, Long> held,
+            BarrierCut firedCut) {
         private void rollback() {
             prior.forEach((partition, state) -> restore(topology, partition, state));
         }
@@ -533,6 +667,13 @@ public final class ColumnarRunner {
      * {@link #runOnce(Duration)} or {@link #runOnceTransactional(Duration)} in a
      * loop; the runner owns no threads.
      *
+     * <p>A runner built with a {@link BarrierAlignment} also aligns on the cuts of a
+     * barrier group. It holds back every record at or above a partition's marker
+     * offset, pauses that partition, and fires the barrier once every assigned
+     * partition reaches the cut. Firing snapshots each owned partition under the cut's
+     * epoch and commits the cut offsets, so the stored state is exactly the committed
+     * state at the cut.
+     *
      * <p>Closing the runner saves and releases every partition it still owns and
      * closes the built topology. The consumer and producer remain the caller's to
      * close.
@@ -544,7 +685,11 @@ public final class ColumnarRunner {
         private final ColumnarErrorPolicy errorPolicy;
         private final ColumnarStateStore stateStore;
         private final ColumnarMetrics metrics;
+        private final BarrierAlignment barrier;
         private final Set<TopicPartition> owned = new HashSet<>();
+        private final Set<TopicPartition> heldBack = new HashSet<>();
+        private BarrierCut pendingCut;
+        private long lastBarrierEpoch = -1;
 
         private GroupRunner(
                 BuiltColumnarTopology topology,
@@ -552,13 +697,15 @@ public final class ColumnarRunner {
                 Producer<byte[], byte[]> producer,
                 ColumnarErrorPolicy errorPolicy,
                 ColumnarStateStore stateStore,
-                ColumnarMetrics metrics) {
+                ColumnarMetrics metrics,
+                BarrierAlignment barrier) {
             this.topology = topology;
             this.consumer = consumer;
             this.producer = producer;
             this.errorPolicy = errorPolicy;
             this.stateStore = stateStore;
             this.metrics = metrics;
+            this.barrier = barrier;
         }
 
         /**
@@ -574,7 +721,17 @@ public final class ColumnarRunner {
          *     empty when the poll returned nothing
          */
         public Map<TopicPartition, Long> runOnce(Duration pollTimeout) {
-            return runGroupOnce(topology, consumer, producer, pollTimeout, errorPolicy, metrics);
+            var poll = runCycle(
+                    topology,
+                    consumer,
+                    producer,
+                    pollTimeout,
+                    errorPolicy,
+                    metrics,
+                    adoptCut(),
+                    stateStore);
+            settle(poll);
+            return nextOffsets(poll.offsets());
         }
 
         /**
@@ -590,7 +747,17 @@ public final class ColumnarRunner {
          *     empty when the poll returned nothing
          */
         public Map<TopicPartition, Long> runOnceTransactional(Duration pollTimeout) {
-            return runGroupOnceTransactional(topology, consumer, producer, pollTimeout, errorPolicy, metrics);
+            var poll = runCycleTransactional(
+                    topology,
+                    consumer,
+                    producer,
+                    pollTimeout,
+                    errorPolicy,
+                    metrics,
+                    adoptCut(),
+                    stateStore);
+            settle(poll);
+            return nextOffsets(poll.offsets());
         }
 
         /**
@@ -600,6 +767,54 @@ public final class ColumnarRunner {
          */
         public ColumnarMetrics metrics() {
             return metrics;
+        }
+
+        /**
+         * Returns the cut this runner is waiting for.
+         *
+         * @return the pending cut, or empty when no barrier is pending
+         */
+        public Optional<BarrierCut> pendingCut() {
+            return Optional.ofNullable(pendingCut);
+        }
+
+        /**
+         * Restores every owned partition to a barrier epoch and seeks the inputs to
+         * the cut.
+         *
+         * <p>The runner drops the current operator state of each owned logical
+         * partition, loads the epoch's snapshot from the state store, and seeks every
+         * assigned partition that the cut names to its marker offset. Processing then
+         * resumes exactly at the cut. Call it while the runner is not inside
+         * {@code runOnce}.
+         *
+         * @param epoch the barrier epoch to restore
+         * @return the cut the runner restored to
+         * @throws ColumnarException if the runner has no barrier alignment or the
+         *     group has no complete cut for the epoch
+         * @throws IllegalArgumentException if the epoch is negative
+         */
+        public BarrierCut restoreToEpoch(long epoch) {
+            requireBarrier();
+            if (epoch < 0) {
+                throw new IllegalArgumentException("barrier epoch must not be negative");
+            }
+            return restoreTo(barrier.reader().completeCutsAfter(barrier.group(), epoch - 1).stream()
+                    .filter(candidate -> candidate.epoch() == epoch)
+                    .findFirst()
+                    .orElseThrow(() -> new ColumnarException(
+                            "no complete barrier cut for group " + barrier.group() + " epoch " + epoch)));
+        }
+
+        /**
+         * Restores every owned partition to the newest complete cut of the group.
+         *
+         * @return the cut the runner restored to, or empty when the group has none
+         * @throws ColumnarException if the runner has no barrier alignment
+         */
+        public Optional<BarrierCut> restoreToLatestCut() {
+            requireBarrier();
+            return barrier.reader().latestCompleteCut(barrier.group()).map(this::restoreTo);
         }
 
         /**
@@ -617,7 +832,9 @@ public final class ColumnarRunner {
                     .map(TopicPartition::partition)
                     .filter(partition -> !priorLogicalPartitions.contains(partition))
                     .distinct()
-                    .forEach(partition -> topology.restorePartition(partition, stateStore.load(partition)));
+                    .forEach(partition -> topology.restorePartition(
+                            partition, stateStore.load(partition, ColumnarStateStore.LIVE_EPOCH)));
+            dropPendingCut();
         }
 
         /**
@@ -661,15 +878,97 @@ public final class ColumnarRunner {
         }
 
         private void release(java.util.Collection<TopicPartition> partitions, boolean save) {
+            dropPendingCut();
             owned.removeAll(partitions);
+            heldBack.removeAll(partitions);
             partitions.stream().map(TopicPartition::partition).distinct().forEach(partition -> {
                 if (owned.stream().noneMatch(candidate -> candidate.partition() == partition)) {
                     if (save) {
-                        stateStore.save(partition, topology.snapshotPartition(partition));
+                        stateStore.save(
+                                partition,
+                                ColumnarStateStore.LIVE_EPOCH,
+                                topology.snapshotPartition(partition));
                     }
                     topology.releasePartition(partition);
                 }
             });
+        }
+
+        private BarrierCut adoptCut() {
+            if (barrier == null || pendingCut != null) {
+                return pendingCut;
+            }
+            for (var candidate : barrier.reader().completeCutsAfter(barrier.group(), lastBarrierEpoch)) {
+                if (alreadyPast(candidate)) {
+                    lastBarrierEpoch = candidate.epoch();
+                    continue;
+                }
+                pendingCut = candidate;
+                return pendingCut;
+            }
+            return null;
+        }
+
+        private boolean alreadyPast(BarrierCut cut) {
+            return consumer.assignment().stream().anyMatch(partition -> {
+                var offset = cut.offset(partition);
+                return offset.isPresent() && consumer.position(partition) > offset.getAsLong();
+            });
+        }
+
+        private void settle(ProcessedPoll poll) {
+            var cut = poll.firedCut();
+            if (cut != null) {
+                resumeHeldBack();
+                pendingCut = null;
+                lastBarrierEpoch = cut.epoch();
+                barrier.listener().onBarrier(cut);
+                return;
+            }
+            var pause = poll.held().keySet().stream()
+                    .filter(partition -> !heldBack.contains(partition))
+                    .toList();
+            if (!pause.isEmpty()) {
+                consumer.pause(pause);
+                heldBack.addAll(pause);
+            }
+        }
+
+        private BarrierCut restoreTo(BarrierCut cut) {
+            dropPendingCut();
+            lastBarrierEpoch = cut.epoch();
+            logicalPartitions(consumer).forEach(partition -> {
+                topology.releasePartition(partition);
+                topology.restorePartition(partition, stateStore.load(partition, cut.epoch()));
+            });
+            consumer.assignment().forEach(partition ->
+                    cut.offset(partition).ifPresent(offset -> consumer.seek(partition, offset)));
+            return cut;
+        }
+
+        private void dropPendingCut() {
+            if (barrier == null) {
+                return;
+            }
+            resumeHeldBack();
+            pendingCut = null;
+        }
+
+        private void resumeHeldBack() {
+            if (heldBack.isEmpty()) {
+                return;
+            }
+            var resume = heldBack.stream().filter(consumer.assignment()::contains).toList();
+            heldBack.clear();
+            if (!resume.isEmpty()) {
+                consumer.resume(resume);
+            }
+        }
+
+        private void requireBarrier() {
+            if (barrier == null) {
+                throw new ColumnarException("this runner has no barrier alignment");
+            }
         }
     }
 }

@@ -157,10 +157,47 @@ class ColumnarStatefulFeaturesTest {
         var store = new FileColumnarStateStore(directory);
         var expected = Map.of("aggregate", new byte[] {1, 2, 3});
 
-        store.save(4, expected);
+        store.save(4, ColumnarStateStore.LIVE_EPOCH, expected);
 
-        assertThat(store.load(4)).usingRecursiveComparison().isEqualTo(expected);
-        assertThat(store.load(5)).isEmpty();
+        assertThat(store.load(4, ColumnarStateStore.LIVE_EPOCH))
+                .usingRecursiveComparison()
+                .isEqualTo(expected);
+        assertThat(store.load(5, ColumnarStateStore.LIVE_EPOCH)).isEmpty();
+    }
+
+    @Test
+    void fileStateStoreKeepsEpochSnapshotsApartFromTheRunningState(@TempDir java.nio.file.Path directory) {
+        var store = new FileColumnarStateStore(directory);
+
+        store.save(3, ColumnarStateStore.LIVE_EPOCH, Map.of("aggregate", new byte[] {1}));
+        store.save(3, 11, Map.of("aggregate", new byte[] {2}));
+
+        assertThat(store.load(3, ColumnarStateStore.LIVE_EPOCH))
+                .usingRecursiveComparison()
+                .isEqualTo(Map.of("aggregate", new byte[] {1}));
+        assertThat(store.load(3, 11)).usingRecursiveComparison().isEqualTo(Map.of("aggregate", new byte[] {2}));
+        assertThat(store.load(3, 12)).isEmpty();
+    }
+
+    @Test
+    void fileStateStoreWritesTheSharedContainerLayout(@TempDir java.nio.file.Path directory)
+            throws java.io.IOException {
+        var store = new FileColumnarStateStore(directory);
+        var snapshot = new java.util.LinkedHashMap<String, byte[]>();
+        snapshot.put("zeta", new byte[] {9});
+        snapshot.put("alpha", new byte[] {1, 2});
+
+        store.save(2, 9, snapshot);
+
+        assertThat(java.nio.file.Files.readAllBytes(directory.resolve("partition-2-epoch-9.snapshot")))
+                .containsExactly(
+                        0, 0, 0, 1,
+                        0, 0, 0, 2,
+                        0, 0, 0, 5, 'a', 'l', 'p', 'h', 'a',
+                        0, 0, 0, 2, 1, 2,
+                        0, 0, 0, 4, 'z', 'e', 't', 'a',
+                        0, 0, 0, 1, 9);
+        assertThat(store.load(2, 9)).usingRecursiveComparison().isEqualTo(snapshot);
     }
 
     private static org.apache.arrow.vector.VectorSchemaRoot run(

@@ -1,6 +1,6 @@
 # krabka streams for Java documentation
 
-This directory documents `krabka-streams-java` version `1.2.0`.
+This directory documents `krabka-streams-java` version `1.3.0`.
 
 ## Guides
 
@@ -12,6 +12,7 @@ This directory documents `krabka-streams-java` version `1.2.0`.
 | [Serdes](serdes.md)                         | Avro, Protobuf, and JSON Schema serdes and the Confluent wire format  |
 | [Columnar processing](columnar.md)          | Arrow batches, codecs, topologies, and the partition runner           |
 | [Columnar operators](columnar-operators.md) | Built-in operators, custom processors, and buffer ownership           |
+| [Barrier alignment](barriers.md)            | Cuts, aligned processing, epoch-keyed snapshots, and restore          |
 | [Testing](testing.md)                       | `ColumnarTestDriver`, `SchemaRegistryStub`, and the integration suite |
 | [API reference](api-reference.md)           | Every public type, grouped by module                                  |
 | [Architecture](architecture.md)             | Module layout, data flow, and design decisions                        |

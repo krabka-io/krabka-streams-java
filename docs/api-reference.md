@@ -1,6 +1,6 @@
 # API reference
 
-Every public type in `1.2.0`, grouped by module. Types not listed here are
+Every public type in `1.3.0`, grouped by module. Types not listed here are
 package-private implementation details and are not part of the compatibility surface.
 
 The full Javadoc is browsable at <https://krabka-io.github.io/krabka-streams-java/>.
@@ -234,8 +234,14 @@ Runner support types:
 
 - `ColumnarErrorPolicy`: `fail()`, `skip()`, or `deadLetter(topic)`.
 - `ColumnarMetrics`: lock-free counters exposed through an immutable `Snapshot`.
-- `ColumnarStateStore`: partition `load` and `save`; `none()` is ephemeral.
-- `FileColumnarStateStore`: atomically replaced snapshot files under a caller-owned path.
+- `ColumnarStateStore`: `load(int partition, long epoch)` and
+  `save(int partition, long epoch, Map<String, byte[]> snapshot)`; `LIVE_EPOCH` is the
+  rebalance state and `none()` is ephemeral.
+- `FileColumnarStateStore`: atomically replaced snapshot files under a caller-owned path,
+  in the container the three krabka streams libraries share.
+
+The seven-argument `group` overload also accepts a `BarrierAlignment`. A runner built
+with one exposes `pendingCut()`, `restoreToEpoch(long)`, and `restoreToLatestCut()`.
 
 ### Codecs
 
@@ -330,6 +336,25 @@ public final class ColumnarException extends RuntimeException {
 
 `ConsumedRecord` and `ProduceRecord` copy their byte arrays on construction and on
 access. `value` must not be null; `key` may be.
+
+### Barrier alignment
+
+Package `io.krabka.streams.columnar.barrier`. See
+[Barrier alignment](barriers.md) for usage.
+
+| Type                | Signature                                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BarrierCut`        | `record BarrierCut(String group, long epoch, long triggeredAt, long completedAt, BarrierCutStatus status, Map<TopicPartition, Long> offsets, Set<TopicPartition> missing)` |
+| `BarrierCutStatus`  | `enum`: `COMPLETE`, `PARTIAL`; `code()` and `fromCode(int)`                                                                                                                |
+| `BarrierCutDecoder` | `final class`: `static Optional<BarrierCut> decode(byte[] key, byte[] value)`; `TOPIC` is `__barrier_state`                                                                |
+| `BarrierCutReader`  | `final class`: `BarrierCutReader(Consumer<byte[], byte[]>)`, optional `Duration`; `latestCompleteCut(String)` and `completeCutsAfter(String, long)`                        |
+| `BarrierAlignment`  | `record BarrierAlignment(String group, BarrierCutReader reader, BarrierListener listener)`; `on(String, BarrierCutReader)` and `withListener`                              |
+| `BarrierListener`   | `interface`: `void onBarrier(BarrierCut cut)`; `none()`                                                                                                                    |
+
+`BarrierCut` members: `complete()`, `offset(TopicPartition)` returning `OptionalLong`,
+`recordsBefore(TopicPartition, List<ConsumedRecord>)`, and
+`reached(TopicPartition, long position)`. The offsets and the missing partitions are
+copied on construction, so a decoded cut is immutable.
 
 ---
 

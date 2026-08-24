@@ -257,13 +257,13 @@ class ColumnarRunnerTest {
         private final java.util.ArrayList<Integer> saved = new java.util.ArrayList<>();
 
         @Override
-        public Map<String, byte[]> load(int partition) {
+        public Map<String, byte[]> load(int partition, long epoch) {
             loaded.add(partition);
             return Map.of();
         }
 
         @Override
-        public void save(int partition, Map<String, byte[]> snapshot) {
+        public void save(int partition, long epoch, Map<String, byte[]> snapshot) {
             saved.add(partition);
         }
     }
