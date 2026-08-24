@@ -77,6 +77,36 @@ record and Kafka-managed stores; a columnar operator sees one fetched batch and
 partition-local state managed by `BuiltColumnarTopology`. Snapshots are explicit and
 the file store is local rather than a broker changelog.
 
+### A barrier cut arrives as a manifest, not as a marker
+
+A barrier marker is a Kafka control record, and the JVM `KafkaConsumer` drops every
+control batch before the application sees it. Java cannot see a marker in band,
+whatever the runtime does. The broker publishes each cut to the internal
+`__barrier_state` topic for that reason, and `BarrierCutReader` reads it with a plain
+assign, seek, and poll loop over a consumer the caller owns.
+
+The consequence is that alignment is offset arithmetic, not marker detection. The runner
+compares each partition's consumed offsets against the manifest, processes everything
+below the marker offset, and holds the rest. A partition that reaches its offset pauses
+until the others catch up, so a lagging partition costs no repeated fetches.
+
+The reader drops partial cuts. A partial cut names partitions that will never receive
+the epoch's marker, so a task that waited for one would wait forever. The broker
+publishes a partial cut, and does not hide it, so that a reader can skip the epoch.
+
+### Snapshots are keyed by epoch, and the container is shared
+
+`ColumnarStateStore` keys a snapshot by partition and epoch. Rebalance state uses
+`LIVE_EPOCH`, which is `-1`, and a barrier epoch is never negative, so one store holds
+both without a second interface.
+
+The file container is the layout the barrier design freezes for the three krabka streams
+libraries: a big-endian `u32` version, a `u32` entry count, and then length-prefixed
+names and values, with entries in ascending byte order of the name. The bytes are
+then deterministic, and the three libraries read one another's containers. The
+payload inside each entry stays language-specific, so a Java snapshot does not restore
+into a Go task.
+
 ### One fetched batch is the unit of work
 
 Arrow pays off when a vector is long enough to amortize per-batch overhead, and a

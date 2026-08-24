@@ -22,7 +22,7 @@ aggregate_javadoc(
     groups = {
         "Kafka Streams": "io.krabka.streams",
         "Schema registry and serdes": "io.krabka.streams.schema",
-        "Columnar processing": "io.krabka.streams.columnar",
+        "Columnar processing": "io.krabka.streams.columnar:io.krabka.streams.columnar.barrier",
         "Avro and Protobuf Arrow bridges": "io.krabka.streams.columnar.schema",
         "Test utilities": "io.krabka.streams.test",
     },

@@ -331,7 +331,7 @@ val aggregateJavadoc = tasks.register<Javadoc>("aggregateJavadoc") {
         overview = rootProject.file("docs/site/overview.html").absolutePath
         group("Kafka Streams", "io.krabka.streams")
         group("Schema registry and serdes", "io.krabka.streams.schema")
-        group("Columnar processing", "io.krabka.streams.columnar")
+        group("Columnar processing", "io.krabka.streams.columnar", "io.krabka.streams.columnar.barrier")
         group("Avro and Protobuf Arrow bridges", "io.krabka.streams.columnar.schema")
         group("Test utilities", "io.krabka.streams.test")
         bottom = "<a href=\"https://github.com/krabka-io/krabka-streams-java\">krabka-streams-java</a>" +

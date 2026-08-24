@@ -6,7 +6,7 @@ It uses the Apache Kafka Streams API and adds krabka schema registry and Apache 
 The minimum Java version is 17.
 
 ```kotlin
-implementation("io.krabka:krabka-streams:1.2.0")
+implementation("io.krabka:krabka-streams:1.3.0")
 ```
 
 ## Modules
@@ -36,6 +36,7 @@ release is published at <https://krabka-io.github.io/krabka-streams-java/>.
 | [Serdes](docs/serdes.md)                         | Avro, Protobuf, JSON Schema, and the Confluent wire format |
 | [Columnar processing](docs/columnar.md)          | Arrow batches, codecs, topologies, runner                  |
 | [Columnar operators](docs/columnar-operators.md) | Built-in operators and buffer ownership                    |
+| [Barrier alignment](docs/barriers.md)            | Cuts, aligned processing, epoch-keyed snapshots, restore   |
 | [Testing](docs/testing.md)                       | Test drivers, registry stub, integration suite             |
 | [API reference](docs/api-reference.md)           | Every public type                                          |
 | [Architecture](docs/architecture.md)             | Module layout and design decisions                         |
@@ -87,7 +88,7 @@ To consume the source directly from another Bazel module, add this to its
 `MODULE.bazel` (replace the commit with the revision you want to pin):
 
 ```starlark
-bazel_dep(name = "krabka_streams_java", version = "1.2.0")
+bazel_dep(name = "krabka_streams_java", version = "1.3.0")
 git_override(
     module_name = "krabka_streams_java",
     remote = "https://github.com/krabka-io/krabka-streams-java.git",
@@ -147,12 +148,17 @@ state per logical partition across fetched batches. The group runner adds snapsh
 rebalance hooks, metrics, acknowledged asynchronous sends, and skip or dead-letter
 error policies. `GzipBatchCodec` provides bounded per-record compression.
 
+The group runner also aligns on the broker's barrier cuts. It reads each cut from the
+internal `__barrier_state` topic, holds every record at or above the cut back, snapshots
+each partition under the cut's epoch, and restores to that epoch on request.
+
 `krabka-streams-columnar-schema` bridges the registry serdes into the columnar
 runtime: `AvroBatchCodec` and `ProtobufBatchCodec` decode registry-framed topics into
 batches whose columns follow the record schema — structs, lists, maps, decimals, and
 timestamps as native Arrow types — and encode processed batches back.
 
-See [Columnar processing](docs/columnar.md) and [Columnar operators](docs/columnar-operators.md).
+See [Columnar processing](docs/columnar.md), [Columnar operators](docs/columnar-operators.md),
+and [Barrier alignment](docs/barriers.md).
 
 ## Test utilities
 
@@ -164,7 +170,7 @@ See [Testing](docs/testing.md).
 
 ## Status
 
-The current version is `1.2.0`. See [PARITY.md](PARITY.md) for the parity checklist,
+The current version is `1.3.0`. See [PARITY.md](PARITY.md) for the parity checklist,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [runtime constraints](docs/limitations.md).
 
 ## License

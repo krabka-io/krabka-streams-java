@@ -363,6 +363,12 @@ partition snapshots on revocation and restores them on assignment. Lost partitio
 are released without saving. `sendAsync(outputs, producer)` exposes the acknowledged,
 non-flushing producer flow directly.
 
+## Barrier alignment
+
+A group runner can align its work on the broker's barrier cuts: it holds every record at
+or above a cut's marker offset back, snapshots each partition under the cut's epoch, and
+restores to that epoch on request. See [Barrier alignment](barriers.md).
+
 ## Next
 
 - [Columnar operators](columnar-operators.md): the built-in operators, custom

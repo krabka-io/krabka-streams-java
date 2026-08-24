@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.0 - 2026-08-24
+
+- Add `io.krabka.streams.columnar.barrier`, the client side of the broker's barrier
+  primitive: `BarrierCutDecoder` decodes the `__barrier_state` records, `BarrierCutReader`
+  reads a group's complete cuts over a plain assign, seek, and poll loop, and `BarrierCut`
+  carries one epoch's marker offset for every partition. Partial cuts are never returned
+  as alignable, because a partition that receives no marker never reaches the cut.
+- Align the columnar group runner on a cut. `ColumnarRunner.group` accepts a
+  `BarrierAlignment`, truncates each partition at its marker offset, pauses the partition
+  until every assigned partition reaches the cut, and then fires the barrier: it snapshots
+  each owned partition under the cut's epoch, commits the cut offsets, and calls the
+  `BarrierListener`. `runOnceTransactional` does the same work inside the producer
+  transaction, so the cut and the transaction boundary coincide.
+- Add `GroupRunner.restoreToEpoch` and `GroupRunner.restoreToLatestCut`, which load an
+  epoch's snapshot and seek every input partition to the cut.
+- Key `ColumnarStateStore` snapshots by partition and epoch. `load` and `save` take an
+  epoch, rebalance state uses the new `ColumnarStateStore.LIVE_EPOCH`, and
+  `FileColumnarStateStore` writes a cut's state to `partition-<n>-epoch-<e>.snapshot`.
+- Change the `FileColumnarStateStore` container to the layout the barrier design freezes
+  for all three krabka streams libraries: a big-endian `u32` version, a `u32` entry count,
+  and then per entry a `u32` name length, the UTF-8 name, a `u32` value length, and the
+  value bytes, with entries in ascending byte order of the name. The previous format wrote
+  a 16-bit modified-UTF-8 name length and left entry order to the map, so snapshot files
+  from earlier builds do not load.
+
 ## 1.2.0 - 2026-08-10
 
 - Add `krabka-streams-columnar-schema`, connecting the schema registry serdes to the
