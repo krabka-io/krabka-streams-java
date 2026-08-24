@@ -9,10 +9,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The cut wire format is frozen across {@code krabka-broker}, {@code krabka-streams-rs},
- * {@code krabka-streams-go} and this module. These bytes are encoded straight from the
- * specification in the broker's barrier design document, independently of all four
- * implementations, so a decoder that drifts fails here. The same vector is asserted in the other
- * three.
+ * {@code krabka-streams-go} and this module. These bytes are encoded straight from the layout the
+ * broker's barrier modules document, independently of all four implementations, so a decoder that
+ * drifts fails here. The same vector is asserted in the other three.
  */
 final class BarrierCutGoldenTest {
 
