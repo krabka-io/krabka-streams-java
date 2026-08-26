@@ -5,5 +5,6 @@ include(
     "krabka-streams-schema-serde",
     "krabka-streams-columnar",
     "krabka-streams-columnar-schema",
+    "krabka-streams-coordination",
     "krabka-streams-test-utils",
 )

@@ -12,6 +12,7 @@ krabka-streams                 org.apache.kafka:kafka-streams (api)
       ├── krabka-streams-columnar-schema krabka-streams-schema-serde and
       │                                  krabka-streams-columnar (api),
       │                                  protobuf-java-util (implementation)
+      ├── krabka-streams-coordination    kafka-clients, through krabka-streams (api)
       └── krabka-streams-test-utils      depends on all four
                                          kafka-streams-test-utils (api)
 ```
@@ -19,6 +20,10 @@ krabka-streams                 org.apache.kafka:kafka-streams (api)
 `krabka-streams` holds one class. Its real job is to be the single place where the
 Kafka Streams version is pinned, so the other modules inherit it and applications get a
 consistent classpath from any one artifact.
+
+`krabka-streams-coordination` sits beside the feature modules and knows none of them. It
+uses the Kafka producer, consumer, and admin clients only, so it runs in a process that
+has no Kafka Streams topology and no Arrow.
 
 The two base feature modules do not know about each other: the schema module has no
 Arrow dependency and the columnar module has no Avro or Protobuf dependency. They meet
@@ -94,6 +99,34 @@ The reader drops partial cuts. A partial cut names partitions that will never re
 the epoch's marker, so a task that waited for one would wait forever. The broker
 publishes a partial cut, and does not hide it, so that a reader can skip the epoch.
 
+### The leadership epoch is the safety mechanism, and the lease is not
+
+`krabka-streams-coordination` elects one leader per role. The leadership epoch is the
+producer epoch that Kafka's transaction coordinator mints for
+`transactional.id = <role>`. The quorum mints it, the coordinator never reuses a value,
+and every broker rejects a write that carries a superseded epoch. The cluster fences a
+deposed leader, and the leader does not have to fence itself.
+
+The lease adds no safety of its own. It decides when a standby stops waiting for a quiet
+holder, and nothing else. A wrong lease makes a failover early or late. A wrong lease
+never makes two writers authoritative. The consequence for a caller is that a leader
+does not prove its lease is live before each write. The write carries the proof, and the
+broker checks it.
+
+Two details follow from that choice and are easy to get wrong. The fencing token is the
+pair `(producerId, producerEpoch)` and the comparison reads the producer id first,
+because the epoch is a `short` that wraps and Kafka then allocates a fresh producer id.
+Rank comes from the offset of a registration record in the log, not from a configuration
+file, so a recovered node lands at the tail of the roster and never preempts the member
+that replaced it.
+
+All records of one role go to one partition, which `RolePartitioner` computes from the
+role name with Kafka's own key hash. The registration key and the lease key of one role
+differ, so a key-hashing partitioner would split the role across two partitions and
+destroy the total order the rank depends on.
+
+See [Coordination](coordination.md).
+
 ### Snapshots are keyed by epoch, and the container is shared
 
 `ColumnarStateStore` keys a snapshot by partition and epoch. Rebalance state uses
@@ -164,6 +197,8 @@ half-built one in the type system.
 | `SchemaFetchPendingException` | `SchemaCache`               | a writer schema is being fetched; retry                            |
 | `SerializationException`      | serdes, `ArrowIpcSerde`     | Kafka's own type, so existing handlers apply                       |
 | `ColumnarException`           | codecs, topology, operators | Arrow-side failure                                                 |
+| `CoordinationException`       | coordination codec, client  | malformed record, bad config, or a failed cluster call             |
+| `FencedException`             | coordination transport      | another member holds the role now; stop the work of the role       |
 | `IllegalArgumentException`    | builders                    | programming error caught at wiring time                            |
 
 Messages name the offending element, whether that is the subject, the column, the node,
@@ -207,6 +242,11 @@ consumer.poll ──► ConsumedRecord[] ──► source (BatchCodec.decode)
 | `BuiltColumnarTopology`      | thread-safe; serialized calls and state isolated by logical partition           |
 | `ColumnarTestDriver`         | not thread-safe                                                                 |
 | `SchemaRegistryStub`         | request handling is synchronized                                                |
+| `CoordinationCodec`          | thread-safe; a static codec with no state                                       |
+| `Succession`, `RoleState`    | thread-safe; pure rules over immutable values                                   |
+| `RoleStateBuilder`           | not thread-safe while folding                                                   |
+| `KafkaCoordinationTransport` | thread-safe; producer state in `ConcurrentHashMap`                              |
+| `Leadership`                 | not thread-safe; confine it to the thread that runs the role                    |
 | Arrow allocators and roots   | not thread-safe; confine to one thread                                          |
 
 One built topology can be shared when serialized processing is acceptable. Use one per
@@ -222,6 +262,7 @@ thread for parallelism and independent processor state.
 | Protobuf Java Util              | 4.33.5  | `implementation`                             |
 | Jackson Databind                | 2.22.0  | `api` (serde), `implementation` (columnar)   |
 | Apache Arrow                    | 19.0.0  | `api` (vector), `runtimeOnly` (memory-netty) |
+| Apache Kafka Clients            | 4.3.1   | `api`, through `krabka-streams`              |
 | networknt json-schema-validator | 2.0.4   | `implementation`                             |
 | JUnit                           | 5.13.4  | test                                         |
 

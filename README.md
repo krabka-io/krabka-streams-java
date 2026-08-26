@@ -6,7 +6,7 @@ It uses the Apache Kafka Streams API and adds krabka schema registry and Apache 
 The minimum Java version is 17.
 
 ```kotlin
-implementation("io.krabka:krabka-streams:1.3.0")
+implementation("io.krabka:krabka-streams:1.4.0")
 ```
 
 ## Modules
@@ -17,6 +17,7 @@ implementation("io.krabka:krabka-streams:1.3.0")
 | `io.krabka:krabka-streams-schema-serde`    | Avro, Protobuf, and JSON Schema serdes       |
 | `io.krabka:krabka-streams-columnar`        | Apache Arrow batch processing                |
 | `io.krabka:krabka-streams-columnar-schema` | Avro and Protobuf Arrow bridges              |
+| `io.krabka:krabka-streams-coordination`    | Leader election, leases, fencing tokens      |
 | `io.krabka:krabka-streams-test-utils`      | Test helpers for all modules                 |
 | `io.krabka:krabka-streams-bom`             | Version constraints for every module         |
 
@@ -37,6 +38,7 @@ release is published at <https://krabka-io.github.io/krabka-streams-java/>.
 | [Columnar processing](docs/columnar.md)          | Arrow batches, codecs, topologies, runner                  |
 | [Columnar operators](docs/columnar-operators.md) | Built-in operators and buffer ownership                    |
 | [Barrier alignment](docs/barriers.md)            | Cuts, aligned processing, epoch-keyed snapshots, restore   |
+| [Coordination](docs/coordination.md)             | Leader election, leases, fencing tokens, succession        |
 | [Testing](docs/testing.md)                       | Test drivers, registry stub, integration suite             |
 | [API reference](docs/api-reference.md)           | Every public type                                          |
 | [Architecture](docs/architecture.md)             | Module layout and design decisions                         |
@@ -88,7 +90,7 @@ To consume the source directly from another Bazel module, add this to its
 `MODULE.bazel` (replace the commit with the revision you want to pin):
 
 ```starlark
-bazel_dep(name = "krabka_streams_java", version = "1.3.0")
+bazel_dep(name = "krabka_streams_java", version = "1.4.0")
 git_override(
     module_name = "krabka_streams_java",
     remote = "https://github.com/krabka-io/krabka-streams-java.git",
@@ -160,6 +162,37 @@ timestamps as native Arrow types — and encode processed batches back.
 See [Columnar processing](docs/columnar.md), [Columnar operators](docs/columnar-operators.md),
 and [Barrier alignment](docs/barriers.md).
 
+## Leader election
+
+One role elects one leader, and Kafka's transaction coordinator supplies the proof. The
+leadership epoch is the producer epoch that the coordinator mints for
+`transactional.id = <role>`. The quorum mints it, the value only grows, and every broker
+rejects a write that carries an older one. The lease adds no safety. It decides when a
+standby stops waiting for a quiet holder, and nothing else.
+
+```java
+Role role = Role.of("controller");
+MemberId me = MemberId.of("node-1");
+try (CoordinationClient client = new CoordinationClient(transport);
+    Leadership leadership = client.acquire(role, me, Duration.ofMinutes(1))) {
+  while (running) {
+    if (leadership.renewDue()) {
+      leadership.renew();
+    }
+    dispatch(leadership.token());
+  }
+} catch (FencedException lost) {
+  controller.stop();
+}
+```
+
+Per-role state lives in the compacted internal topic `__coordination_state`. A candidate
+appends a registration record, and the offset of that record is its place in the
+succession order. A recovered node registers again and lands at the tail, so it never
+preempts the member that replaced it.
+
+See [Coordination](docs/coordination.md).
+
 ## Test utilities
 
 `ColumnarTestDriver` runs a built columnar topology without a broker. `SchemaRegistryStub` provides
@@ -170,7 +203,7 @@ See [Testing](docs/testing.md).
 
 ## Status
 
-The current version is `1.3.0`. See [PARITY.md](PARITY.md) for the parity checklist,
+The current version is `1.4.0`. See [PARITY.md](PARITY.md) for the parity checklist,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [runtime constraints](docs/limitations.md).
 
 ## License

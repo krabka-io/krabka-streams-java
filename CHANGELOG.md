@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.4.0 - 2026-08-26
+
+- Add `krabka-streams-coordination`, the Java port of the coordination primitives: leader
+  election, leases, and fencing tokens for one role. The leadership epoch is the producer
+  epoch that Kafka's transaction coordinator mints for `transactional.id = <role>`, so the
+  quorum mints it, the broker enforces it, and a deposed leader does not have to fence
+  itself. The lease adds no safety of its own. It decides when a standby stops waiting for
+  a quiet holder, and a wrong lease makes a failover early or late rather than making two
+  writers authoritative.
+- Add `CoordinationCodec`, the codec of the frozen `__coordination_state` record layouts.
+  Every integer is big-endian and signed, and a string is an `i16` byte length and then
+  plain UTF-8, which is Kafka's own layout and not `DataOutput.writeUTF`. Golden byte
+  vectors pin all four layouts, and `krabka-client-rs` and `krabka-streams-go` assert the
+  same bytes.
+- Compare a fencing token as the pair `(producerId, producerEpoch)`, producer id first.
+  The producer epoch is a `short` that wraps, and Kafka then allocates a fresh producer id
+  and resets the epoch to zero, so a comparison on the epoch alone accepts a stale writer
+  after about 32000 leadership changes. `FencingToken.NO_EPOCH` names a role that no
+  member has ever taken.
+- Rank candidates on the offset of their registration record, and not on a configuration
+  file. `RoleState` folds the partition in offset order, so a recovered node registers
+  again, lands at the tail of the roster, and never preempts the member that replaced it.
+- Add `Succession.evaluate`, the pure succession rules. They read a role state, an
+  instant, and a `LeaseConfig`, and they perform no input and no output, so a test drives
+  a whole failover with `ManualClock` and no broker. A challenger of rank `n` challenges
+  one stagger later than rank `n - 1`, which saves epoch churn and supplies no safety.
+- Pin every record of one role to one partition with `RolePartitioner`, which applies
+  Kafka's own key hash to the role name. The registration key and the lease key of one
+  role differ, so a key-hashing partitioner would split the role across two partitions and
+  destroy the total order that rank depends on.
+- Add `KafkaCoordinationTransport` over `Admin.describeTransactions`, a `KafkaProducer`
+  with `transactional.id`, a second plain producer for registrations, and a committed-read
+  consumer. It maps broker error code 47 `INVALID_PRODUCER_EPOCH` and broker error code 90
+  `PRODUCER_FENCED` onto `FencedException`, which is the only signal that a leadership
+  ended.
+- Add `CoordinationClient`, `Leadership`, and `LeadershipStatus`. `tryAcquire` runs one
+  election pass and never blocks, `acquire` repeats that pass until this member wins the
+  role, and `describe` answers the third-party question of whether the author of the
+  current lease still holds the epoch.
+
 ## 1.3.0 - 2026-08-24
 
 - Add `io.krabka.streams.columnar.barrier`, the client side of the broker's barrier
