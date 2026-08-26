@@ -1,6 +1,6 @@
 # API reference
 
-Every public type in `1.3.0`, grouped by module. Types not listed here are
+Every public type in `1.4.0`, grouped by module. Types not listed here are
 package-private implementation details and are not part of the compatibility surface.
 
 The full Javadoc is browsable at <https://krabka-io.github.io/krabka-streams-java/>.
@@ -402,6 +402,108 @@ The bridges derive their Arrow schema once, at construction, from the reader sch
 or message descriptor; mid-stream writer evolution never changes the columns.
 Conversion choices that the Arrow type alone cannot reverse are tagged with
 `krabka.avro.*`, `krabka.proto.*`, or `krabka.json` field metadata.
+
+---
+
+## `krabka-streams-coordination`
+
+Package `io.krabka.streams.coordination`. See [Coordination](coordination.md) for usage.
+The module depends on `krabka-streams` for the pinned Kafka client version and uses the
+producer, consumer, and admin clients only.
+
+### Role, MemberId
+
+`public final class`, each `Comparable` and each built by one factory.
+
+| Member       | Signature                                                            |
+| ------------ | -------------------------------------------------------------------- |
+| `MAX_LENGTH` | `public static final int` = `249` bytes, on both types               |
+| `of`         | `static Role of(String name)`, `static MemberId of(String id)`       |
+| accessor     | `String name()` on `Role`, `String id()` on `MemberId`               |
+| `bytes`      | `byte[] bytes()` on `Role`, the UTF-8 name the partition rule hashes |
+
+Both factories throw `CoordinationException` for an empty name and for a name past the
+byte bound. A `Role` becomes a Kafka `transactional.id`.
+
+### FencingToken
+
+`public final class implements Comparable<FencingToken>`
+
+| Member          | Signature                                                             |
+| --------------- | --------------------------------------------------------------------- |
+| `NO_EPOCH`      | `public static final FencingToken`, the role no member has ever taken |
+| `of`            | `static FencingToken of(long producerId, short producerEpoch)`        |
+| `parse`         | `static FencingToken parse(String text)`, the `id:epoch` form         |
+| `producerId`    | `long producerId()`                                                   |
+| `producerEpoch` | `short producerEpoch()`                                               |
+| `minted`        | `boolean minted()`                                                    |
+| `compareTo`     | lexicographic: producer id first, then producer epoch                 |
+| `supersedes`    | `boolean supersedes(FencingToken other)`                              |
+
+`of` rejects a negative value in either position.
+
+### Record types and codec
+
+| Type                | Signature                                                                       |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `RecordKind`        | `enum`: `REGISTRATION` (0), `LEASE` (1); `code()`, `fromCode(short)`            |
+| `CoordinationValue` | `sealed interface permits Registration, Lease`: `kind()`, `member()`            |
+| `Registration`      | `record(MemberId member, long registeredAt)`                                    |
+| `Lease`             | `record(MemberId member, FencingToken token, long grantedAt, long deadline)`    |
+| `CoordinationKey`   | `record(RecordKind kind, Role role, Optional<MemberId> member)`                 |
+| `CoordinationEntry` | `record(long offset, CoordinationKey key, Optional<CoordinationValue> value)`   |
+| `CoordinationCodec` | `TOPIC`, `encodeKey`, `encodeValue`, `decodeKey`, `decodeValue`, `isTombstone`  |
+| `RolePartitioner`   | `DEFAULT_PARTITIONS` = 16; `static int partitionFor(Role role, int partitions)` |
+
+`CoordinationKey.registration(Role, MemberId)` and `CoordinationKey.lease(Role)` build a
+key that keeps the member rule of the frozen layout. `decodeValue` returns an empty
+`Optional` for a tombstone.
+
+### Lease policy and clock
+
+| Type          | Signature                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `LeaseConfig` | `defaults()`, `of(Duration, Duration, Duration)`, `duration()`, `renewInterval()`, `challengeStagger()`, `renewsWithMargin()` |
+| `LeaseConfig` | `challengeDelayMillis(int rank)`, `grant(MemberId, FencingToken, long)`, `timing(Lease)`                                      |
+| `LeaseTiming` | `lease()`, `expiresAtMillis()`, `liveAt(long)`, `remainingAt(long)`, `renewAtMillis()`, `renewDueAt(long)`                    |
+| `LeaseTiming` | `challengeAtMillis(int rank)`                                                                                                 |
+| `Clock`       | `long nowMillis()`; `static Clock system()`                                                                                   |
+| `ManualClock` | `ManualClock(long nowMillis)`, `set(long)`, `advance(Duration)`                                                               |
+
+The defaults are a 30-second lease, a 10-second renew interval, and a 5-second challenge
+stagger. `of` rejects an extent that is not positive and a renew interval that is not
+shorter than the duration.
+
+### Succession
+
+| Type               | Signature                                                                    |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `RosterEntry`      | `record(MemberId member, long offset, long registeredAt)`                    |
+| `RoleState`        | `empty()`, `fromRecords(Role, Iterable<CoordinationEntry>)`                  |
+| `RoleState`        | `roster()`, `lease()`, `holder()`, `entry(MemberId)`, `rankOf(MemberId)`     |
+| `RoleStateBuilder` | `RoleStateBuilder(Role)`, `role()`, `apply(CoordinationEntry)`, `build()`    |
+| `Decision`         | `record(Decision.Action action, long waitUntilMillis)`                       |
+| `Decision.Action`  | `NOT_REGISTERED`, `HOLD`, `CHALLENGE`, `WAIT`                                |
+| `Succession`       | `static Decision evaluate(RoleState, MemberId, long nowMillis, LeaseConfig)` |
+
+The rules perform no input and no output. `rankOf` returns an `OptionalInt`, and the
+rank is the index in the roster after the removal of the current holder.
+
+### Transport and client
+
+| Type                         | Signature                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `CoordinationTransport`      | `acquireEpoch`, `readRoleRecords`, `register`, `writeLease`, `clearLease`, `describe`, `close`         |
+| `KafkaCoordinationTransport` | `(Admin, Producer, Function<Role, Producer>, Consumer)` and an overload that takes a poll timeout      |
+| `CoordinationClient`         | `(CoordinationTransport)` and `(CoordinationTransport, LeaseConfig, Clock, Duration)`                  |
+| `CoordinationClient`         | `config()`, `readState(Role)`, `describe(Role)`, `tryAcquire(Role, MemberId)`, `acquire(...)`          |
+| `Leadership`                 | `role()`, `member()`, `token()`, `lease()`, `timing()`, `held()`, `renewDue()`, `renew()`, `resign()`  |
+| `LeadershipStatus`           | `record(Role role, FencingToken token, RoleState state)`; `holder()`, `lease()`, `held()`, `current()` |
+| `CoordinationException`      | `public class extends RuntimeException`                                                                |
+| `FencedException`            | `public final class extends CoordinationException`; `role()`                                           |
+
+`Leadership` is `AutoCloseable` and resigns on close. `FencedException` is the only
+signal that a leadership ended.
 
 ---
 
