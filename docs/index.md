@@ -26,6 +26,7 @@ This directory documents `krabka-streams-java` version `1.4.0`.
 - [README.md](../README.md): project overview
 - [PARITY.md](../PARITY.md): feature parity checklist
 - [CHANGELOG.md](../CHANGELOG.md): release notes
+- [ROADMAP.md](../ROADMAP.md): planned work, by milestone
 
 ## Conventions in these documents
 

@@ -1,0 +1,667 @@
+# The roadmap, as data.
+#
+# `.github/workflows/roadmap.yml` runs `.github/scripts/sync_roadmap.py` over this file
+# and creates or updates the labels, milestones, and issues it declares. The sync is
+# idempotent: it matches milestones by title and issues by the `id` below, which it
+# writes into each issue body as an HTML comment.
+#
+# An `id` is permanent. Retitle and rewrite an issue freely; change its `id` and the
+# sync creates a second issue instead of updating the first.
+#
+# ROADMAP.md is the prose view of this file. Keep the two in step.
+
+labels:
+  - name: roadmap
+    color: "0e8a16"
+    description: Tracked on the published roadmap
+  - name: "area:columnar"
+    color: "1d76db"
+    description: Arrow columnar runtime, operators, and barriers
+  - name: "area:schema-registry"
+    color: "5319e7"
+    description: Schema registry client, cache, and serdes
+  - name: "area:coordination"
+    color: "b60205"
+    description: Leader election, leases, and fencing tokens
+  - name: "area:build"
+    color: "555555"
+    description: Bazel, Gradle, CI, packaging, and release
+  - name: "type:feature"
+    color: "a2eeef"
+    description: New public API or behavior
+  - name: "type:chore"
+    color: "fef2c0"
+    description: Build, tooling, or maintenance work
+  - name: "type:test"
+    color: "c5def5"
+    description: Test coverage and conformance
+
+milestones:
+  - title: "1.5.0 — Operability"
+    due_on: 2026-10-15
+    description: >-
+      Running the columnar runtime and the coordination client in production, and being
+      able to see what they are doing.
+  - title: "1.6.0 — Columnar depth"
+    due_on: 2026-12-15
+    description: >-
+      The gaps between the columnar operator set and the topologies people actually
+      write.
+  - title: "1.7.0 — Schema registry depth"
+    due_on: 2027-02-15
+    description: >-
+      The registry client covers the endpoints; this milestone covers the deployments.
+  - title: "2.0.0 — Platform and packaging"
+    due_on: 2027-04-15
+    description: >-
+      The changes that need a major version because they move the floor under consumers.
+  - title: "Engineering quality"
+    description: >-
+      Continuous work that makes every other milestone cheaper. No target date.
+
+issues:
+  # ---------------------------------------------------------------- 1.5.0
+
+  - id: columnar-metrics-export
+    title: Export columnar metrics through Kafka's metrics registry and JMX
+    milestone: "1.5.0 — Operability"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `ColumnarMetrics` records batches, input and output records, failures, dead
+      letters, and processing time, and exposes them through `snapshot()`. Reading it
+      means writing a poller: nothing publishes the counters where an existing
+      monitoring stack already looks.
+
+      ## Scope
+
+      - Publish the counters as Kafka `Metrics` under a `krabka-columnar` group, so an
+        application's configured `MetricsReporter` picks them up with no extra wiring.
+      - Register the same measurements as an MBean for plain JMX consumers.
+      - Break the counters down per logical partition, keeping the aggregate view that
+        `snapshot()` returns today.
+      - Add rate and latency measurements derived from the existing counters rather than
+        new instrumentation points in the hot path.
+
+      ## Done when
+
+      - A runner started with a reporter emits the metrics without any call beyond the
+        existing constructor argument.
+      - A test asserts the metric names, groups, and tags, so renaming one is a visible
+        change.
+      - `docs/columnar.md` documents every published metric.
+
+  - id: columnar-tracing
+    title: Add tracing hooks around columnar batch processing
+    milestone: "1.5.0 — Operability"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      A columnar batch is the unit of work, and when one is slow there is no way to see
+      where the time went beyond the aggregate processing nanos.
+
+      ## Scope
+
+      - Define a listener SPI in `krabka-streams-columnar` with no tracing dependency:
+        one callback per batch and per node, carrying topic, partition, offsets, row
+        counts, and outcome.
+      - Propagate trace context in and out through record headers, since the columnar
+        codecs already carry `__headers`.
+      - Provide an OpenTelemetry adapter outside the core module so the dependency stays
+        optional.
+
+      ## Done when
+
+      - The SPI is called for successful, skipped, and dead-lettered batches alike.
+      - A no-op default costs nothing measurable in the benchmark added by the JMH
+        benchmark item.
+      - `docs/columnar.md` shows the adapter in use.
+
+  - id: snapshot-retention
+    title: Retain and reclaim epoch-keyed columnar snapshots
+    milestone: "1.5.0 — Operability"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `FileColumnarStateStore` writes `partition-<n>-epoch-<e>.snapshot` for every
+      barrier epoch and never deletes one. A long-running runner accumulates a file per
+      epoch per partition until the disk fills, and nothing tells an operator which
+      epochs are still restorable.
+
+      ## Scope
+
+      - Add a retention policy to `ColumnarStateStore`: keep the last _n_ epochs, or
+        every epoch newer than a duration, with the live snapshot exempt.
+      - Reclaim on a successful barrier rather than on a timer, so the deletion point is
+        a state the runner already reached.
+      - Expose the retained epochs so `restoreToEpoch` can fail with a list of what is
+        available instead of a missing file.
+
+      ## Done when
+
+      - A test drives several barriers and asserts exactly which snapshot files survive.
+      - Reclamation never deletes the epoch a restore is reading.
+      - `docs/barriers.md` documents the policy and its default.
+
+  - id: barrier-diagnostics
+    title: Report why a barrier cut has not aligned
+    milestone: "1.5.0 — Operability"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      When a cut never completes, the runner holds records back and keeps polling. From
+      the outside that is indistinguishable from an idle topic: `BarrierCutStatus` knows
+      the cut is partial, but nothing reports which partitions are missing or for how
+      long.
+
+      ## Scope
+
+      - Track time-to-align per epoch and the set of partitions still short of the cut.
+      - Surface both through the metrics added by the metrics export item, and through
+        `BarrierListener` so an application can react.
+      - Log once per epoch, not per poll, when a cut has been outstanding beyond a
+        configured threshold.
+
+      ## Done when
+
+      - A test with a deliberately partial cut asserts the reported partitions.
+      - The threshold warning fires once and names the partitions and the epoch.
+      - `docs/barriers.md` and `docs/troubleshooting.md` map the symptom to the cause.
+
+  - id: coordination-inspection
+    title: Inspect every role's roster and lease
+    milestone: "1.5.0 — Operability"
+    labels: [roadmap, "area:coordination", "type:feature"]
+    body: |
+      `CoordinationClient.describe` answers the question for one role that the caller
+      already knows about. An operator asking "who leads what, and which standby is
+      next" has to fold `__coordination_state` by hand.
+
+      ## Scope
+
+      - Add a read-only inspection API that lists roles, and for each one the current
+        holder, its fencing token, the lease expiry, and the succession order with each
+        member's rank.
+      - Keep it a pure read: no registration record, no transactional producer, no
+        effect on any election.
+      - Reuse `RoleStateBuilder` so the inspection and the election agree by
+        construction.
+
+      ## Done when
+
+      - A test asserts the roster of a role with several registrations, a failover, and a
+        recovered member that re-registered at the tail.
+      - The API is usable from a process that holds no role.
+      - `docs/coordination.md` documents it.
+
+  # ---------------------------------------------------------------- 1.6.0
+
+  - id: columnar-sort-topk
+    title: Add sort, top-k, and distinct operators
+    milestone: "1.6.0 — Columnar depth"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `BuiltinOp` covers filter, select, with-columns, and grouped aggregation. Ordering
+      a batch, taking its largest _k_ rows, or dropping duplicates all fall back to a
+      custom `ColumnarProcessor`, which is where every application then repeats the same
+      Arrow buffer handling.
+
+      ## Scope
+
+      - `sort` over one or more columns, with per-column direction and null placement.
+      - `topK`, which is a bounded sort and should not materialize a full ordering.
+      - `distinct` over a column subset, keeping the first row of each group.
+      - All three follow the buffer ownership rules the built-in operators already
+        document.
+
+      ## Scope note
+
+      Sorting is per batch, which is per fetched topic partition batch. Ordering across
+      batches is a different feature and is not in scope here.
+
+      ## Done when
+
+      - Each operator has tests over the Arrow types `ArrowValues` supports, including
+        nulls.
+      - `docs/columnar-operators.md` documents the semantics and the per-batch scope.
+
+  - id: columnar-session-sliding-windows
+    title: Add session and sliding windows
+    milestone: "1.6.0 — Columnar depth"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `windowedGroupBy` covers fixed windows keyed by event time. Sessions, which close
+      on a gap rather than on a boundary, and sliding windows, which emit on each record
+      rather than on each window, are the two shapes applications ask for next.
+
+      ## Scope
+
+      - Session windows with a configurable inactivity gap, including the merge of two
+        sessions that a late record joins.
+      - Sliding windows over a size and a step.
+      - Both keep the existing `__window_start` and `__window_end` output columns.
+      - Both carry per-partition state across batches the way the current windowed
+        aggregation does, and both snapshot under the barrier epoch.
+
+      ## Done when
+
+      - Tests cover late records, session merges, and restoration from a snapshot taken
+        mid-window.
+      - `docs/columnar-operators.md` states the emit and retention rules for each.
+
+  - id: columnar-user-aggregates
+    title: Allow user-defined aggregate functions
+    milestone: "1.6.0 — Columnar depth"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `AggregateFunction` is a closed enum. An application that needs a percentile, a
+      distinct count, or a domain-specific rollup cannot express it as an aggregation and
+      has to write a whole processor instead.
+
+      ## Scope
+
+      - An interface with the four operations an incremental aggregate needs: create an
+        accumulator, add a row, merge two accumulators, and produce the output value with
+        its Arrow type.
+      - Accumulators serialize into the existing snapshot format so a user aggregate
+        survives a barrier and a restore.
+      - The built-in functions become implementations of the same interface, so there is
+        one code path.
+
+      ## Done when
+
+      - A user aggregate in a test survives a snapshot and restore round trip.
+      - A malformed aggregate fails at `validate()`, not mid-stream.
+      - `docs/columnar-operators.md` documents the interface with an example.
+
+  - id: columnar-explain
+    title: Render a built topology as an execution plan
+    milestone: "1.6.0 — Columnar depth"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `ColumnarTopology.validate()` rejects a bad graph, and `build()` returns one that
+      runs, but there is no way to print what was built. Debugging a wiring mistake means
+      reading the construction code.
+
+      ## Scope
+
+      - An `explain()` on the built topology that renders sources, operators, joins,
+        merges, and sinks as a stable, readable tree.
+      - Include the per-node facts that change behavior: topics, codecs, join windows,
+        grouping keys, and which nodes hold state.
+      - Keep the output deterministic so it can be asserted in a test and diffed in a
+        review.
+
+      ## Done when
+
+      - A golden-file test pins the rendering of a topology using every node kind.
+      - `docs/columnar.md` shows the output for the documented example topology.
+
+  - id: columnar-spillable-state
+    title: Add a spillable columnar state store
+    milestone: "1.6.0 — Columnar depth"
+    labels: [roadmap, "area:columnar", "type:feature"]
+    body: |
+      `ColumnarStateStore` has an in-memory implementation and a file implementation that
+      writes whole snapshots. Both hold the live state on heap, so a windowed aggregation
+      or a join over a large key space is bounded by the JVM heap.
+
+      ## Scope
+
+      - A store that keeps live state off heap or on disk and reads it back per key,
+        rather than serializing the whole partition at once.
+      - The same epoch-keyed snapshot and restore contract as the file store, so barriers
+        keep working unchanged.
+      - Keep the dependency optional: the columnar module must not gain a mandatory
+        native dependency.
+
+      ## Scope note
+
+      Whether the backing store is RocksDB, a memory-mapped file, or an Arrow-native
+      spill format is part of this item and should be settled with a benchmark, not in
+      advance.
+
+      ## Done when
+
+      - A test drives a state size beyond a deliberately small heap budget.
+      - Restore from a snapshot matches the in-memory store row for row.
+      - `docs/columnar.md` and `docs/limitations.md` state the trade-off.
+
+  # ---------------------------------------------------------------- 1.7.0
+
+  - id: subject-name-strategies
+    title: Add record-name and topic-record-name subject strategies
+    milestone: "1.7.0 — Schema registry depth"
+    labels: [roadmap, "area:schema-registry", "type:feature"]
+    body: |
+      `SubjectNameStrategy` has one implementation, `TopicNameStrategy`. A topic carrying
+      several record types, which is the usual reason to choose another strategy, cannot
+      be addressed without writing the strategy in the application.
+
+      ## Scope
+
+      - `RecordNameStrategy` and `TopicRecordNameStrategy`, both deriving the record name
+        from Avro full names, Protobuf message names, and the JSON Schema title.
+      - Make the strategy configurable on every serde that takes one today.
+      - Prewarming resolves subjects through the configured strategy, so a cache warmed
+        under one strategy is not silently wrong under another.
+
+      ## Done when
+
+      - Tests cover all three schema kinds under each strategy.
+      - A strategy that cannot derive a record name fails with a message naming the
+        schema, not a `NullPointerException`.
+      - `docs/serdes.md` documents each strategy and when to use it.
+
+  - id: registry-token-auth
+    title: Authenticate to the registry with a bearer token or mutual TLS
+    milestone: "1.7.0 — Schema registry depth"
+    labels: [roadmap, "area:schema-registry", "type:feature"]
+    body: |
+      `KrabkaSchemaRegistryClient` supports HTTP basic authentication. Deployments behind
+      an OAuth-issuing gateway or a mutual TLS boundary have to build their own
+      `HttpClient` and lose the constructor that sets the credential.
+
+      ## Scope
+
+      - A credential abstraction resolved per request, so a token that expires can be
+        refreshed without rebuilding the client.
+      - Static bearer tokens and a supplier-based form for refreshed tokens.
+      - Mutual TLS through an injected `SSLContext`, documented alongside the existing
+        `HttpClient` constructor.
+      - Never log a credential, and redact it from exception messages.
+
+      ## Done when
+
+      - Tests assert the header on every request kind, including retries.
+      - A refreshed token is picked up without a new client.
+      - `docs/schema-registry.md` documents each mode.
+
+  - id: registry-retry-policy
+    title: Make registry timeouts, backoff, and negative caching configurable
+    milestone: "1.7.0 — Schema registry depth"
+    labels: [roadmap, "area:schema-registry", "type:feature"]
+    body: |
+      The client retries a fixed two times with no backoff and no request timeout, and
+      `SchemaCache` clears the marker for a failed fetch so the next record retries
+      immediately. Against a registry that is down or rate limiting, that turns one
+      outage into a tight retry loop.
+
+      ## Scope
+
+      - Configurable request timeout, maximum attempts, and exponential backoff with
+        jitter.
+      - Honor `Retry-After` on 429 and 503 rather than guessing.
+      - Negative caching for an ID the registry reports as unknown, with a bounded TTL,
+        so a genuinely missing schema is not fetched once per record.
+      - Keep the retriable exception contract: a pending fetch still throws
+        `SchemaFetchPendingException`.
+
+      ## Done when
+
+      - Tests drive each failure mode against `SchemaRegistryStub` and assert the attempt
+        timing.
+      - The defaults are documented and are what an unconfigured client gets today or
+        safer.
+      - `docs/schema-registry.md` and `docs/troubleshooting.md` cover the behavior.
+
+  - id: bounded-schema-cache
+    title: Bound the schema cache
+    milestone: "1.7.0 — Schema registry depth"
+    labels: [roadmap, "area:schema-registry", "type:feature"]
+    body: |
+      `SchemaCache` is an unbounded map. A long-lived consumer over a topic whose
+      producers keep registering versions accumulates every schema and every parsed
+      form it has ever seen, and there is no way to see how large it has grown.
+
+      ## Scope
+
+      - An optional maximum entry count with least-recently-used eviction, defaulting to
+        the current unbounded behavior so no existing deployment changes.
+      - Never evict an entry that prewarming pinned.
+      - Expose hits, misses, evictions, and size, matching the metrics work in 1.5.0.
+
+      ## Done when
+
+      - A test asserts eviction order and that a pinned entry survives.
+      - Eviction of a writer schema that arrives again re-fetches cleanly rather than
+        failing.
+      - `docs/schema-registry.md` documents the bound and its default.
+
+  - id: json-schema-references
+    title: Resolve JSON Schema `$ref` through registry references
+    milestone: "1.7.0 — Schema registry depth"
+    labels: [roadmap, "area:schema-registry", "type:feature"]
+    body: |
+      `resolvedSchemaById` returns a schema with its references, and the Avro and
+      Protobuf paths use them. JSON Schema validation still treats a `$ref` to another
+      registered subject as unresolvable, so a JSON Schema split across subjects cannot
+      be validated.
+
+      ## Scope
+
+      - Feed registry references into the validator as a resolved schema map, keyed the
+        way the reference names them.
+      - Support the reference forms the registry itself accepts, and fail with the
+        unresolved name when a reference is missing.
+      - Cache the resolved composite so the resolution happens once per schema ID, not
+        once per record.
+
+      ## Done when
+
+      - A test registers a parent and a child subject and round trips a record through
+        `JsonSchemaSerde`.
+      - A missing reference fails with a message naming the subject and version.
+      - `docs/serdes.md` documents the supported reference forms.
+
+  # ---------------------------------------------------------------- 2.0.0
+
+  - id: jpms-module-info
+    title: Publish real JPMS module descriptors
+    milestone: "2.0.0 — Platform and packaging"
+    labels: [roadmap, "area:build", "type:chore"]
+    body: |
+      Every artifact carries a stable `Automatic-Module-Name`, which makes the modules
+      usable on the module path but leaves their dependencies unchecked and their
+      internals exported. A `module-info.java` per module is a breaking change for anyone
+      reaching into a non-exported package, so it belongs in a major release.
+
+      ## Scope
+
+      - A `module-info.java` for each published module, exporting only the documented
+        packages.
+      - Requires clauses that match the `api` and `implementation` split the build
+        already makes.
+      - Both Gradle and Bazel compile and test the descriptors; neither may drift.
+      - Decide and document what happens to the `all` classifier artifacts, whose
+        unrelocated dependencies may not be modular.
+
+      ## Done when
+
+      - A test application on the module path compiles and runs against every module.
+      - The javadoc build keeps working with module descriptors present.
+      - `docs/limitations.md` replaces the automatic-module-name paragraph.
+
+  - id: arrow-20
+    title: Move to Apache Arrow 20 and drop `--add-opens`
+    milestone: "2.0.0 — Platform and packaging"
+    labels: [roadmap, "area:build", "type:chore"]
+    body: |
+      The columnar modules pin Arrow 19, which needs
+      `--add-opens=java.base/java.nio=ALL-UNNAMED` for direct buffer access. That flag is
+      the most common first-run failure for a new user and it has to be set by every
+      application, not by the library.
+
+      ## Scope
+
+      - Upgrade Arrow across the Gradle and Bazel dependency sets, including the memory
+        allocator artifacts.
+      - Confirm on each supported JDK whether the flag is still required, and if it is,
+        state exactly which operations need it rather than requiring it globally.
+      - Absorb the API changes in `ArrowValues`, the codecs, and the bridges.
+
+      ## Done when
+
+      - The full test suite passes on every supported JDK without the flag, or the
+        documentation names the precise remaining case.
+      - `docs/limitations.md`, `docs/getting-started.md`, and the README agree.
+
+  - id: java-25
+    title: Support Java 25 across the build and test matrix
+    milestone: "2.0.0 — Platform and packaging"
+    labels: [roadmap, "area:build", "type:chore"]
+    body: |
+      CI builds and tests on Java 17 and 21. Java 25 is already used to run the javadoc
+      tool for the documentation site, but nothing compiles or tests against it, so a
+      change in the newest LTS reaches users before it reaches CI.
+
+      ## Scope
+
+      - Add 25 to the CI matrix in `.github/workflows/ci.yml`.
+      - Keep `--release 17` as the published bytecode target; this is about running on
+        newer runtimes, not raising the floor.
+      - Fix what the newer runtime surfaces, particularly around Arrow's reflective
+        access and any use of restricted native methods.
+
+      ## Done when
+
+      - `bazel test //...` is green on 17, 21, and 25.
+      - The integration workflow runs on the newest LTS too.
+      - `docs/limitations.md` states the supported runtime range.
+
+  - id: kafka-upgrade-path
+    title: Document and automate the Kafka version upgrade path
+    milestone: "2.0.0 — Platform and packaging"
+    labels: [roadmap, "area:build", "type:chore"]
+    body: |
+      The whole point of `krabka-streams` is to pin one Kafka Streams version that every
+      other module inherits. Today that pin appears in `MODULE.bazel`, the Gradle build,
+      the integration workflow's broker image, PARITY.md, and the docs, and a bump means
+      finding all five by hand.
+
+      ## Scope
+
+      - One declared source for the Kafka version that both build systems read.
+      - A check that fails when the documented version, the pinned version, and the
+        integration broker image disagree.
+      - A written upgrade procedure covering broker feature gates such as
+        `streams.version`, and what to do when a new version needs a broker users do not
+        have yet.
+
+      ## Done when
+
+      - Bumping the version in one place propagates everywhere, with a test proving it.
+      - `docs/build-and-release.md` documents the procedure.
+
+  # ---------------------------------------------------------------- Quality
+
+  - id: jmh-benchmarks
+    title: Add a JMH benchmark module for codecs and operators
+    milestone: "Engineering quality"
+    labels: [roadmap, "area:build", "type:test"]
+    body: |
+      Several roadmap items are decisions about performance: the spillable state store,
+      top-k, the tracing SPI's overhead, and the Arrow upgrade. There is no benchmark
+      harness, so each would be argued from reasoning rather than measurement.
+
+      ## Scope
+
+      - A benchmark source set that ships in neither the published artifacts nor the
+        default `bazel test //...` run.
+      - Benchmarks for the batch codecs, `BlobCodec` and `GzipBatchCodec`, the Avro and
+        Protobuf bridges, and the built-in operators over a realistic batch.
+      - A scheduled CI job that runs them and publishes the results as an artifact.
+
+      ## Done when
+
+      - One documented command runs the suite locally.
+      - A pull request can link a before-and-after result for a performance claim.
+      - `docs/build-and-release.md` documents the task.
+
+  - id: error-prone-nullaway
+    title: Run Error Prone and NullAway in the Bazel build
+    milestone: "Engineering quality"
+    labels: [roadmap, "area:build", "type:chore"]
+    body: |
+      The build compiles with javac's own warnings only. Error Prone catches the bug
+      patterns that reviews are worst at, and NullAway enforces the nullness contract
+      that the javadoc already describes in prose.
+
+      ## Scope
+
+      - Wire both into the Bazel Java toolchain so they run in CI and locally, and keep
+        the Gradle build consistent.
+      - Start with the checks that pass, and record the rest as suppressed with a reason
+        rather than turning them off silently.
+      - Annotate package nullness so NullAway has a contract to enforce.
+
+      ## Done when
+
+      - A deliberate null-contract violation fails the build in a test.
+      - The remote cache still works: the analysis must not defeat action caching.
+
+  - id: codeql-scorecard
+    title: Add CodeQL and OpenSSF Scorecard workflows
+    milestone: "Engineering quality"
+    labels: [roadmap, "area:build", "type:chore"]
+    body: |
+      Dependabot and Renovate keep dependencies current, which covers known
+      vulnerabilities in what the project consumes. Nothing analyzes the project's own
+      code, and nothing reports on the repository's supply-chain posture.
+
+      ## Scope
+
+      - A CodeQL workflow over the Java sources, on pull requests and on a schedule.
+      - An OpenSSF Scorecard workflow publishing its result.
+      - Pin third-party actions and keep the least privilege each workflow needs, which
+        is the pattern the existing workflows follow.
+
+      ## Done when
+
+      - Both run on a schedule and on pull requests, and neither blocks unrelated work
+        on a finding it cannot fix.
+      - Findings have an owner: a triage note in the repository says who looks and when.
+
+  - id: coordination-integration-test
+    title: Test leader failover and fencing against a live broker
+    milestone: "Engineering quality"
+    labels: [roadmap, "area:coordination", "type:test"]
+    body: |
+      Coordination is tested against `Succession`'s pure rules and golden byte vectors.
+      The integration suite covers the broker and the registry, but not coordination, so
+      the claim that Kafka's transaction coordinator fences a deposed leader is not
+      exercised against a real broker in CI.
+
+      ## Scope
+
+      - An integration test that elects a leader, takes it over from a second member, and
+        asserts the first member's next write fails with `FencedException`.
+      - Cover the succession order after a member recovers and re-registers.
+      - Run it against both broker images the integration workflow already starts.
+
+      ## Done when
+
+      - `.github/workflows/integration.yml` runs the test on both brokers.
+      - The test skips, rather than fails, without `KRABKA_INTEGRATION_BOOTSTRAP`, which
+        is what the existing integration tests do.
+      - PARITY.md cites it in the coordination row.
+
+  - id: conformance-vectors
+    title: Share conformance vectors with `krabka-client-rs` and `krabka-streams-go`
+    milestone: "Engineering quality"
+    labels: [roadmap, "area:build", "type:test"]
+    body: |
+      Three libraries implement the same frozen layouts: the `__coordination_state`
+      records, the barrier cut records, and the columnar snapshot container. Each keeps
+      its own copy of the golden vectors, so the three copies agree only as long as
+      somebody remembers to update all of them.
+
+      ## Scope
+
+      - One vector set, in a form all three languages can read, with a documented home
+        and a documented update procedure.
+      - A test in this repository that reads that set rather than an inline copy.
+      - A statement of what a vector change means: a wire format change, and therefore a
+        coordinated release of all three libraries.
+
+      ## Done when
+
+      - Adding a layout means adding a vector once.
+      - A vector this library cannot satisfy fails CI here.
+      - PARITY.md and `docs/architecture.md` point at the shared set.

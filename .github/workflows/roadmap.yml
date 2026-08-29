@@ -1,0 +1,55 @@
+name: Roadmap
+
+# Applies `.github/roadmap.yml` to this repository's labels, milestones, and issues.
+# Pull requests get a dry run that prints the plan; `main` applies it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/roadmap.yml
+      - .github/scripts/sync_roadmap.py
+      - .github/workflows/roadmap.yml
+  pull_request:
+    paths:
+      - .github/roadmap.yml
+      - .github/scripts/sync_roadmap.py
+      - .github/workflows/roadmap.yml
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the plan without changing anything
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One sync at a time. Two concurrent runs would race on creating the same milestone.
+concurrency:
+  group: roadmap
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync milestones and issues
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      # A virtual environment rather than the runner's Python, which refuses to install
+      # into the system site-packages.
+      - name: Install PyYAML
+        run: |
+          python3 -m venv .roadmap-venv
+          .roadmap-venv/bin/pip install --quiet --disable-pip-version-check pyyaml
+      - name: Validate the roadmap
+        run: .roadmap-venv/bin/python .github/scripts/sync_roadmap.py --plan-only
+      - name: Sync the roadmap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          .roadmap-venv/bin/python .github/scripts/sync_roadmap.py
+          ${{ (github.event_name == 'pull_request' || inputs.dry_run) && '--dry-run' || '' }}

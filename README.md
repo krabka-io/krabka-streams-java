@@ -204,7 +204,8 @@ See [Testing](docs/testing.md).
 ## Status
 
 The current version is `1.4.0`. See [PARITY.md](PARITY.md) for the parity checklist,
-[CHANGELOG.md](CHANGELOG.md) for release notes, and [runtime constraints](docs/limitations.md).
+[CHANGELOG.md](CHANGELOG.md) for release notes, [ROADMAP.md](ROADMAP.md) for the planned
+work, and [runtime constraints](docs/limitations.md).
 
 ## License
 
