@@ -8,3 +8,4 @@ out/
 node_modules/
 bazel-*
 /user.bazelrc
+__pycache__/
