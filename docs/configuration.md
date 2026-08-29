@@ -95,7 +95,7 @@ replicas exist, so the client-side `num.standby.replicas` alone is not enough.
 A krabka broker finalizes the feature at format time:
 
 ```shell
-crabka format --log-dir /tmp/crabka-data --standalone --node-id 1 \
+krabka format --log-dir /tmp/krabka-data --standalone --node-id 1 \
   --cluster-id 00000000-0000-0000-0000-000000000001 \
   --controller-listener 127.0.0.1:9093 \
   --feature streams.version=1
