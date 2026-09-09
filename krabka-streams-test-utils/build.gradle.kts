@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     api(project(":krabka-streams"))
+    api(project(":krabka-streams-coordination"))
     api(project(":krabka-streams-schema-serde"))
     api(project(":krabka-streams-columnar"))
     api(project(":krabka-streams-columnar-schema"))

@@ -54,6 +54,7 @@ java_test(
     use_testrunner = False,
     deps = [
         ":krabka-streams-test-utils",
+        "//krabka-streams-coordination",
         "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
         "@krabka_streams_maven//:org_assertj_assertj_core",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
