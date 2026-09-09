@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -39,7 +40,6 @@ class CoordinationCompatibilityIT {
         Role role = Role.of("m19-" + UUID.randomUUID().toString().replace("-", ""));
         MemberId firstMember = MemberId.of("java-first");
         MemberId secondMember = MemberId.of("java-second");
-        MemberId recoveredMember = MemberId.of("java-first-recovered");
         LeaseConfig leases = LeaseConfig.of(LEASE, Duration.ofMillis(200), Duration.ofMillis(100));
 
         try (TransportResources first = new TransportResources(bootstrap);
@@ -53,10 +53,10 @@ class CoordinationCompatibilityIT {
             assertThat(newLeader.token().compareTo(oldLeader.token())).isPositive();
             assertThatThrownBy(oldLeader::renew).isInstanceOf(FencedException.class);
 
-            second.transport.register(role, recoveredMember, System.currentTimeMillis());
+            second.transport.register(role, firstMember, System.currentTimeMillis());
             assertThat(secondClient.readState(role).roster())
                     .extracting(entry -> entry.member().id())
-                    .containsExactly(firstMember.id(), secondMember.id(), recoveredMember.id());
+                    .containsExactly(secondMember.id(), firstMember.id());
             newLeader.close();
         }
     }
@@ -64,7 +64,8 @@ class CoordinationCompatibilityIT {
     private static void createTopic(String bootstrap) throws Exception {
         try (Admin admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap))) {
             try {
-                admin.createTopics(Set.of(new NewTopic(CoordinationCodec.TOPIC, 16, (short) 1)))
+                admin.createTopics(Set.of(new NewTopic(CoordinationCodec.TOPIC, 16, (short) 1)
+                                .configs(Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))))
                         .all()
                         .get();
             } catch (ExecutionException error) {
