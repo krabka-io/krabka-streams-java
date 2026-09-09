@@ -31,4 +31,6 @@ the producer epoch that Kafka's transaction coordinator mints for `transactional
 the broker fences a deposed leader and the lease decides only when a standby challenges. The
 `__coordination_state` record layouts and the role-to-partition rule are frozen, and the tests
 assert the same golden vectors as `krabka-client-rs` and `krabka-streams-go`.
+`CoordinationCompatibilityIT` also proves live takeover, stale-writer fencing, and recovered-tail
+ordering against both broker images in `.github/workflows/integration.yml`.
 See [Coordination](docs/coordination.md).
