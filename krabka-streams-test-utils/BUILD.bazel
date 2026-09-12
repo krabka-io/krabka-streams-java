@@ -45,7 +45,9 @@ java_test(
     ],
     env_inherit = [
         "KRABKA_INTEGRATION_BOOTSTRAP",
+        "KRABKA_INTEGRATION_SCHEMA_PHASE",
         "KRABKA_INTEGRATION_SCHEMA_REGISTRY",
+        "KRABKA_INTEGRATION_SCHEMA_TOPIC",
     ],
     javacopts = ["--release", "17", "-parameters"],
     jvm_flags = ["--add-opens=java.base/java.nio=ALL-UNNAMED"],
@@ -57,6 +59,30 @@ java_test(
         "//krabka-streams-coordination",
         "@krabka_streams_maven//:com_google_testparameterinjector_test_parameter_injector_junit5",
         "@krabka_streams_maven//:org_assertj_assertj_core",
+        "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
+    ],
+)
+
+java_test(
+    name = "schema_integration_test",
+    srcs = ["src/integrationTest/java/io/krabka/streams/test/SchemaRegistryCompatibilityIT.java"],
+    args = [
+        "execute",
+        "--select-class=io.krabka.streams.test.SchemaRegistryCompatibilityIT",
+        "--fail-if-no-tests",
+    ],
+    env_inherit = [
+        "KRABKA_INTEGRATION_BOOTSTRAP",
+        "KRABKA_INTEGRATION_SCHEMA_PHASE",
+        "KRABKA_INTEGRATION_SCHEMA_REGISTRY",
+        "KRABKA_INTEGRATION_SCHEMA_TOPIC",
+    ],
+    javacopts = ["--release", "17", "-parameters"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    tags = ["manual"],
+    use_testrunner = False,
+    deps = [
+        ":krabka-streams-test-utils",
         "@krabka_streams_maven//:org_junit_platform_junit_platform_console_standalone",
     ],
 )

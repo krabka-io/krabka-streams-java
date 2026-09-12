@@ -125,6 +125,12 @@ epoch is never negative, so the running state and a cut's state never collide.
 `FileColumnarStateStore` writes the running state to `partition-<n>.snapshot` and a
 cut's state to `partition-<n>-epoch-<e>.snapshot`.
 
+The default store retains the newest 100 barrier epochs per partition. Pass a positive
+count to retain the newest _n_ epochs, or a positive `Duration` to retain snapshots by
+age. Reclamation runs only after a barrier snapshot is safely installed; the live
+snapshot is never reclaimed. `retainedEpochs(partition)` lists what remains, and a
+restore of a reclaimed cut fails with the available epochs by partition.
+
 The file container is the layout the barrier design freezes for all three krabka streams
 libraries.
 

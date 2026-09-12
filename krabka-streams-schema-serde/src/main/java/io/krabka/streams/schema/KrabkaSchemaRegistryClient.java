@@ -256,13 +256,23 @@ public final class KrabkaSchemaRegistryClient {
             }
             var nextAncestors = new java.util.HashSet<>(ancestors);
             nextAncestors.add(key);
+            var resolvedReference = version(reference.subject(), reference.version())
+                    .handle((value, error) -> {
+                        if (error != null) {
+                            throw new java.util.concurrent.CompletionException(new SchemaRegistryException(
+                                    "cannot resolve reference " + reference.subject() + " version "
+                                            + reference.version(),
+                                    error));
+                        }
+                        return value;
+                    })
+                    .thenCompose(value -> resolveReferences(value.references(), nextAncestors).thenApply(nested -> {
+                        var resolved = new java.util.LinkedHashMap<>(nested);
+                        resolved.put(reference.name(), value.schema());
+                        return resolved;
+                    }));
             result = result.thenCombine(
-                    version(reference.subject(), reference.version()).thenCompose(value ->
-                            resolveReferences(value.references(), nextAncestors).thenApply(nested -> {
-                                var resolved = new java.util.LinkedHashMap<>(nested);
-                                resolved.put(reference.name(), value.schema());
-                                return resolved;
-                            })),
+                    resolvedReference,
                     (resolved, next) -> {
                         resolved.putAll(next);
                         return resolved;

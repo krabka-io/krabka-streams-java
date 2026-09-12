@@ -191,6 +191,10 @@ The serde detects Draft 4, 6, 7, 2019-09, or 2020-12 from `$schema`; schemas wit
 default to 2020-12. An extended factory can set the dialect, subject strategy, and
 `ObjectMapper` explicitly. Compiled validators are cached per schema ID.
 
+Registry references are resolved recursively by `SchemaCache` and supplied to JSON
+Schema validation by their registered reference names. An unresolved `$ref` fails with
+that name instead of silently validating without the referenced schema.
+
 The fourth factory takes an `ObjectMapper`, which is how you register modules
 (`JavaTimeModule`), change naming strategies, or relax `FAIL_ON_UNKNOWN_PROPERTIES`.
 A custom mapper is available for values only; keys use the default mapper.

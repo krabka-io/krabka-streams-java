@@ -1,6 +1,8 @@
 package io.krabka.streams.columnar;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Persists operator snapshots for one logical Kafka partition and one epoch.
@@ -54,6 +56,34 @@ public interface ColumnarStateStore {
     void save(int partition, long epoch, Map<String, byte[]> snapshot);
 
     /**
+     * Lists the barrier epochs currently available for a partition.
+     *
+     * <p>An empty optional means the store cannot enumerate epochs.
+     *
+     * @param partition the logical partition number
+     * @return the retained epochs in ascending order, when enumeration is supported
+     */
+    default Optional<List<Long>> retainedEpochs(int partition) {
+        return Optional.empty();
+    }
+
+    /**
+     * Prevents an epoch from being reclaimed while a restore is reading it.
+     *
+     * @param epoch the barrier epoch in use
+     * @return a lease that releases the epoch when closed
+     */
+    default EpochLease retain(long epoch) {
+        return () -> { };
+    }
+
+    /** A closeable snapshot-retention lease without checked exceptions. */
+    interface EpochLease extends AutoCloseable {
+        @Override
+        void close();
+    }
+
+    /**
      * Returns a store that keeps nothing.
      *
      * <p>Loads are empty and saves are discarded, so operator state is ephemeral and
@@ -71,6 +101,11 @@ public interface ColumnarStateStore {
             @Override
             public void save(int partition, long epoch, Map<String, byte[]> snapshot) {
                 // Intentionally ephemeral.
+            }
+
+            @Override
+            public Optional<List<Long>> retainedEpochs(int partition) {
+                return Optional.of(List.of());
             }
         };
     }
