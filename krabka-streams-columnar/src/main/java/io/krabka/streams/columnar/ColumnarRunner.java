@@ -935,15 +935,30 @@ public final class ColumnarRunner {
         }
 
         private BarrierCut restoreTo(BarrierCut cut) {
-            dropPendingCut();
-            lastBarrierEpoch = cut.epoch();
-            logicalPartitions(consumer).forEach(partition -> {
-                topology.releasePartition(partition);
-                topology.restorePartition(partition, stateStore.load(partition, cut.epoch()));
-            });
-            consumer.assignment().forEach(partition ->
-                    cut.offset(partition).ifPresent(offset -> consumer.seek(partition, offset)));
-            return cut;
+            try (var retained = stateStore.retain(cut.epoch())) {
+                var unavailable = logicalPartitions(consumer).stream()
+                        .map(partition -> Map.entry(partition, stateStore.retainedEpochs(partition)))
+                        .filter(entry -> entry.getValue().isPresent()
+                                && !entry.getValue().orElseThrow().contains(cut.epoch()))
+                        .collect(java.util.stream.Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue().orElseThrow(),
+                                (left, right) -> left,
+                                java.util.TreeMap::new));
+                if (!unavailable.isEmpty()) {
+                    throw new ColumnarException("snapshot epoch " + cut.epoch()
+                            + " is not retained; available epochs by partition: " + unavailable);
+                }
+                dropPendingCut();
+                lastBarrierEpoch = cut.epoch();
+                logicalPartitions(consumer).forEach(partition -> {
+                    topology.releasePartition(partition);
+                    topology.restorePartition(partition, stateStore.load(partition, cut.epoch()));
+                });
+                consumer.assignment().forEach(partition ->
+                        cut.offset(partition).ifPresent(offset -> consumer.seek(partition, offset)));
+                return cut;
+            }
         }
 
         private void dropPendingCut() {

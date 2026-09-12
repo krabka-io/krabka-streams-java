@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.apache.kafka.common.errors.SerializationException;
 
 /**
  * Stores schema IDs and writer schemas for synchronous serde operations.
@@ -55,6 +56,7 @@ public final class SchemaCache {
     private final ConcurrentMap<Integer, String> writerMessageTypes = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, Map<String, String>> writerReferences = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, CompletableFuture<?>> fetching = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Integer, SerializationException> fetchFailures = new ConcurrentHashMap<>();
 
     /**
      * Creates a cache that auto-registers schemas and uses the topic naming rule.
@@ -192,6 +194,10 @@ public final class SchemaCache {
         if (schema != null) {
             return schema;
         }
+        var failure = fetchFailures.get(schemaId);
+        if (failure != null) {
+            throw failure;
+        }
         startWriterSchemaFetch(schemaId);
         throw new SchemaFetchPendingException(schemaId);
     }
@@ -248,6 +254,17 @@ public final class SchemaCache {
         writerMessageTypes.put(schemaId, messageType);
     }
 
+    /**
+     * Adds referenced writer schemas directly. This method supports deterministic
+     * tests and offline startup.
+     *
+     * @param schemaId the parent schema ID
+     * @param references reference name to schema text
+     */
+    public void seedWriterReferences(int schemaId, Map<String, String> references) {
+        writerReferences.put(schemaId, Map.copyOf(references));
+    }
+
     private CompletableFuture<Void> resolve(String subject, InternedSchema local) {
         CompletableFuture<Resolution> resolution;
         switch (registerMode) {
@@ -275,17 +292,28 @@ public final class SchemaCache {
         }
         client.resolvedSchemaById(schemaId).whenComplete((fetched, error) -> {
             if (error == null) {
-                writerSchemas.put(schemaId, fetched.schema());
                 if (fetched.messageType() != null) {
                     writerMessageTypes.put(schemaId, fetched.messageType());
                 }
                 writerReferences.put(schemaId, fetched.references());
+                writerSchemas.put(schemaId, fetched.schema());
                 marker.complete(null);
             } else {
+                fetchFailures.put(
+                        schemaId,
+                        new SerializationException(
+                                "cannot resolve writer schema " + schemaId + ": " + unwrap(error).getMessage(),
+                                unwrap(error)));
                 marker.completeExceptionally(error);
             }
             fetching.remove(schemaId, marker);
         });
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        return error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                ? error.getCause()
+                : error;
     }
 
     private record InternedSchema(SchemaKind kind, String schema, String messageType) {

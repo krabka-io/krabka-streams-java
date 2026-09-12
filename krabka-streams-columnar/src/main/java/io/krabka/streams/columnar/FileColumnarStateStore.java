@@ -7,12 +7,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * Stores each partition snapshot in one atomically replaced local file.
@@ -46,7 +48,11 @@ import java.util.Objects;
  */
 public final class FileColumnarStateStore implements ColumnarStateStore {
     private static final int VERSION = 1;
+    private static final int DEFAULT_RETAINED_EPOCHS = 100;
     private final Path directory;
+    private final int retainedEpochs;
+    private final Duration retainedFor;
+    private final Map<Long, Integer> retained = new TreeMap<>();
 
     /**
      * Creates a store rooted at a directory.
@@ -56,7 +62,40 @@ public final class FileColumnarStateStore implements ColumnarStateStore {
      * @param directory the directory the snapshot files live in
      */
     public FileColumnarStateStore(Path directory) {
+        this(directory, DEFAULT_RETAINED_EPOCHS, null);
+    }
+
+    /**
+     * Creates a store that keeps the newest {@code retainedEpochs} barrier snapshots
+     * per partition.
+     *
+     * @param directory the directory the snapshot files live in
+     * @param retainedEpochs the positive number of barrier epochs to retain
+     */
+    public FileColumnarStateStore(Path directory, int retainedEpochs) {
+        this(directory, retainedEpochs, null);
+    }
+
+    /**
+     * Creates a store that keeps barrier snapshots newer than {@code retainedFor}.
+     *
+     * @param directory the directory the snapshot files live in
+     * @param retainedFor the positive snapshot retention duration
+     */
+    public FileColumnarStateStore(Path directory, Duration retainedFor) {
+        this(directory, 0, Objects.requireNonNull(retainedFor, "retainedFor"));
+        if (retainedFor.isZero() || retainedFor.isNegative()) {
+            throw new IllegalArgumentException("retainedFor must be positive");
+        }
+    }
+
+    private FileColumnarStateStore(Path directory, int retainedEpochs, Duration retainedFor) {
         this.directory = Objects.requireNonNull(directory, "directory");
+        if (retainedFor == null && retainedEpochs < 1) {
+            throw new IllegalArgumentException("retainedEpochs must be positive");
+        }
+        this.retainedEpochs = retainedEpochs;
+        this.retainedFor = retainedFor;
     }
 
     /**
@@ -69,7 +108,7 @@ public final class FileColumnarStateStore implements ColumnarStateStore {
      * @throws ColumnarException if the file exists but cannot be read or is corrupt
      */
     @Override
-    public Map<String, byte[]> load(int partition, long epoch) {
+    public synchronized Map<String, byte[]> load(int partition, long epoch) {
         var file = file(partition, epoch);
         if (!Files.exists(file)) {
             return Map.of();
@@ -107,9 +146,10 @@ public final class FileColumnarStateStore implements ColumnarStateStore {
      * @throws ColumnarException if the file cannot be written or moved into place
      */
     @Override
-    public void save(int partition, long epoch, Map<String, byte[]> snapshot) {
+    public synchronized void save(int partition, long epoch, Map<String, byte[]> snapshot) {
         try {
             Files.createDirectories(directory);
+            deleteTemporaryFiles();
             var target = file(partition, epoch);
             var temporary = Files.createTempFile(directory, target.getFileName().toString(), ".tmp");
             try {
@@ -135,8 +175,91 @@ public final class FileColumnarStateStore implements ColumnarStateStore {
             } finally {
                 Files.deleteIfExists(temporary);
             }
+            if (epoch != ColumnarStateStore.LIVE_EPOCH) {
+                reclaim(partition);
+            }
         } catch (IOException error) {
             throw new ColumnarException("cannot save partition " + partition + " state", error);
+        }
+    }
+
+    @Override
+    public synchronized java.util.Optional<List<Long>> retainedEpochs(int partition) {
+        try {
+            if (!Files.isDirectory(directory)) {
+                return java.util.Optional.of(List.of());
+            }
+            try (var files = Files.list(directory)) {
+                return java.util.Optional.of(files.map(Path::getFileName)
+                        .map(Path::toString)
+                        .map(name -> epoch(partition, name))
+                        .flatMapToLong(java.util.OptionalLong::stream)
+                        .sorted()
+                        .boxed()
+                        .toList());
+            }
+        } catch (IOException error) {
+            throw new ColumnarException("cannot list partition " + partition + " state", error);
+        }
+    }
+
+    @Override
+    public synchronized EpochLease retain(long epoch) {
+        retained.merge(epoch, 1, Integer::sum);
+        return () -> release(epoch);
+    }
+
+    private synchronized void release(long epoch) {
+        retained.computeIfPresent(epoch, (ignored, count) -> count == 1 ? null : count - 1);
+    }
+
+    private void reclaim(int partition) throws IOException {
+        try (var files = Files.list(directory)) {
+            var snapshots = files.filter(path -> epoch(partition, path.getFileName().toString()).isPresent())
+                    .sorted((left, right) -> Long.compare(
+                            epoch(partition, right.getFileName().toString()).orElseThrow(),
+                            epoch(partition, left.getFileName().toString()).orElseThrow()))
+                    .toList();
+            if (retainedFor == null) {
+                for (var stale : snapshots.subList(Math.min(retainedEpochs, snapshots.size()), snapshots.size())) {
+                    if (!retained.containsKey(epoch(partition, stale.getFileName().toString()).orElseThrow())) {
+                        Files.deleteIfExists(stale);
+                    }
+                }
+            } else {
+                var cutoff = java.nio.file.attribute.FileTime.from(java.time.Instant.now().minus(retainedFor));
+                for (var stale : snapshots) {
+                    if (Files.getLastModifiedTime(stale).compareTo(cutoff) < 0
+                            && !retained.containsKey(epoch(partition, stale.getFileName().toString()).orElseThrow())) {
+                        Files.deleteIfExists(stale);
+                    }
+                }
+            }
+        }
+    }
+
+    private void deleteTemporaryFiles() throws IOException {
+        try (var files = Files.list(directory)) {
+            for (var temporary : files.filter(path -> {
+                        var name = path.getFileName().toString();
+                        return name.startsWith("partition-") && name.endsWith(".tmp");
+                    })
+                    .toList()) {
+                Files.deleteIfExists(temporary);
+            }
+        }
+    }
+
+    private static java.util.OptionalLong epoch(int partition, String name) {
+        var prefix = "partition-" + partition + "-epoch-";
+        var suffix = ".snapshot";
+        if (!name.startsWith(prefix) || !name.endsWith(suffix)) {
+            return java.util.OptionalLong.empty();
+        }
+        try {
+            return java.util.OptionalLong.of(Long.parseLong(name.substring(prefix.length(), name.length() - suffix.length())));
+        } catch (NumberFormatException ignored) {
+            return java.util.OptionalLong.empty();
         }
     }
 

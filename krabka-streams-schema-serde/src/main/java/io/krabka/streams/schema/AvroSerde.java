@@ -4,7 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaNormalization;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
@@ -63,7 +62,7 @@ public final class AvroSerde<T> extends AbstractSchemaSerde<T> {
             Function<Schema, DatumWriter<T>> writerFactory,
             BiFunction<Schema, Schema, DatumReader<T>> readerFactory,
             SubjectNameStrategy subjectNameStrategy) {
-        super(cache, role, SchemaKind.AVRO, SchemaNormalization.toParsingForm(readerSchema), null, subjectNameStrategy);
+        super(cache, role, SchemaKind.AVRO, readerSchema.toString(), null, subjectNameStrategy);
         this.readerSchema = readerSchema;
         this.writerFactory = writerFactory;
         this.readerFactory = readerFactory;

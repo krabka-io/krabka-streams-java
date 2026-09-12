@@ -191,11 +191,22 @@ public final class JsonSchemaSerde<T> extends AbstractSchemaSerde<T> {
     protected T deserializeBody(int schemaId, byte[] body) throws Exception {
         var writerSchema = cache().writerSchema(schemaId);
         if (validate) {
-            var validator = validators.computeIfAbsent(
-                    schemaId, ignored -> validatorRegistry.getSchema(writerSchema, InputFormat.JSON));
+            var validator = validators.computeIfAbsent(schemaId, ignored -> SchemaRegistry.withDefaultDialect(
+                            SpecificationVersion.fromSchemaNode(readSchema(writerSchema))
+                                    .orElse(SpecificationVersion.DRAFT_2020_12),
+                            builder -> builder.schemas(cache().writerReferences(schemaId)))
+                    .getSchema(writerSchema, InputFormat.JSON));
             validate(validator, body);
         }
         return objectMapper.readValue(body, type);
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode readSchema(String schema) {
+        try {
+            return objectMapper.readTree(schema);
+        } catch (java.io.IOException error) {
+            throw new SerializationException("invalid writer JSON Schema", error);
+        }
     }
 
     private static void validate(Schema validator, byte[] body) {

@@ -72,6 +72,70 @@ class SchemaSerdesTest {
     }
 
     @Test
+    void jsonValidationResolvesRegistryReferences() throws Exception {
+        try (var server = new RegistryStub()) {
+            server.reply(
+                    "GET",
+                    "/schemas/ids/14",
+                    200,
+                    "{\"schema\":\"{\\\"$ref\\\":\\\"Order\\\"}\",\"references\":[{\"name\":\"Order\",\"subject\":\"order-schema\",\"version\":1}]}");
+            server.reply(
+                    "GET",
+                    "/subjects/order-schema/versions/1",
+                    200,
+                    "{\"id\":13,\"schemaType\":\"JSON\",\"schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"id\\\":{\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"id\\\"]}\"}");
+            var cache = new SchemaCache(new KrabkaSchemaRegistryClient(server.uri()));
+            cache.seedSubjectId("orders-value", 14);
+            var serde = JsonSchemaSerde.forValue(Order.class, "{\"type\":\"object\"}", cache, true);
+            var valid = serde.serializer().serialize("orders", new Order("o-1"));
+
+            assertThrows(SchemaFetchPendingException.class, () -> serde.deserializer().deserialize("orders", valid));
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> {
+                while (true) {
+                    try {
+                        assertThat(serde.deserializer().deserialize("orders", valid))
+                                .usingRecursiveComparison()
+                                .isEqualTo(new Order("o-1"));
+                        break;
+                    } catch (SchemaFetchPendingException pending) {
+                        Thread.sleep(10);
+                    }
+                }
+            });
+            var invalid = ConfluentWireFormat.encode(14, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize("orders", invalid));
+            assertEquals(1, server.count("GET", "/subjects/order-schema/versions/1"));
+        }
+    }
+
+    @Test
+    void jsonMissingReferenceNamesSubjectAndVersion() throws Exception {
+        try (var server = new RegistryStub()) {
+            server.reply(
+                    "GET",
+                    "/schemas/ids/15",
+                    200,
+                    "{\"schema\":\"{\\\"$ref\\\":\\\"Missing\\\"}\",\"references\":[{\"name\":\"Missing\",\"subject\":\"missing-schema\",\"version\":2}]}");
+            var cache = new SchemaCache(new KrabkaSchemaRegistryClient(server.uri()));
+
+            assertThrows(SchemaFetchPendingException.class, () -> cache.writerSchema(15));
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> {
+                while (true) {
+                    try {
+                        cache.writerSchema(15);
+                    } catch (SchemaFetchPendingException pending) {
+                        Thread.sleep(10);
+                        continue;
+                    } catch (SerializationException failure) {
+                        assertThat(failure).hasMessageContaining("cannot resolve reference missing-schema version 2");
+                        break;
+                    }
+                }
+            });
+        }
+    }
+
+    @Test
     void kafkaNullsRemainNull() {
         var schema = "{\"type\":\"object\"}";
         var serde = JsonSchemaSerde.forValue(Order.class, schema, offlineCache(), false);
@@ -112,6 +176,28 @@ class SchemaSerdesTest {
                 "orders", serde.serializer().serialize("orders", value));
 
         assertEquals("o-3", decoded.id);
+    }
+
+    @Test
+    void avroRegistrationPreservesDefaultsAndDocumentation() throws Exception {
+        try (var server = new RegistryStub()) {
+            server.reply("POST", "/subjects/events-value/versions", 200, "{\"id\":17}");
+            var cache = new SchemaCache(new KrabkaSchemaRegistryClient(server.uri()));
+            var schema = new Schema.Parser().parse("""
+                    {"type":"record","name":"Event","doc":"retained",
+                     "fields":[{"name":"source","type":"string","default":"legacy"}]}
+                    """);
+            var serde = AvroSerde.generic(schema, cache, Role.VALUE);
+
+            serde.registerSubject("events");
+            cache.prewarm().join();
+
+            var registered = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(server.body("POST", "/subjects/events-value/versions"))
+                    .get("schema")
+                    .asText();
+            assertThat(registered).contains("\"doc\":\"retained\"").contains("\"default\":\"legacy\"");
+        }
     }
 
     @Test

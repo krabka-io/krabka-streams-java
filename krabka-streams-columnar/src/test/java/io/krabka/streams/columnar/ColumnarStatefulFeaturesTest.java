@@ -7,8 +7,10 @@ import com.google.testing.junit.testparameterinjector.junit5.TestParameterInject
 import com.google.testing.junit.testparameterinjector.junit5.TestParameters;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.kafka.common.serialization.Serdes;
@@ -16,6 +18,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ColumnarStatefulFeaturesTest {
+    public static void main(String[] args) {
+        var store = new FileColumnarStateStore(java.nio.file.Path.of(args[1]), 1);
+        if (args[0].equals("save")) {
+            store.save(0, 2, Map.of("state", new byte[64 * 1024 * 1024]));
+        } else {
+            store.save(0, 2_001, Map.of("state", new byte[] {2}));
+        }
+    }
+
     @TestParameterInjectorTest
     @TestParameters("{windowMillis: 10, expectedWindows: 2, expectedTotal: 7}")
     @TestParameters("{windowMillis: 20, expectedWindows: 1, expectedTotal: 10}")
@@ -180,6 +191,70 @@ class ColumnarStatefulFeaturesTest {
     }
 
     @Test
+    void fileStateStoreReclaimsOldEpochsAndInterruptedTemporaryFiles(@TempDir java.nio.file.Path directory)
+            throws java.io.IOException {
+        var store = new FileColumnarStateStore(directory, 2);
+        java.nio.file.Files.createDirectories(directory);
+        var interrupted = directory.resolve("partition-3.snapshot123.tmp");
+        java.nio.file.Files.write(interrupted, new byte[] {9});
+
+        store.save(3, ColumnarStateStore.LIVE_EPOCH, Map.of("aggregate", new byte[] {0}));
+        store.save(3, 10, Map.of("aggregate", new byte[] {1}));
+        store.save(3, 11, Map.of("aggregate", new byte[] {2}));
+        store.save(3, 12, Map.of("aggregate", new byte[] {3}));
+
+        assertThat(store.retainedEpochs(3)).contains(List.of(11L, 12L));
+        assertThat(store.load(3, ColumnarStateStore.LIVE_EPOCH))
+                .usingRecursiveComparison()
+                .isEqualTo(Map.of("aggregate", new byte[] {0}));
+        assertThat(java.nio.file.Files.exists(interrupted)).isFalse();
+    }
+
+    @Test
+    void fileStateStoreDoesNotReclaimAnEpochWhileItIsInUse(@TempDir java.nio.file.Path directory) {
+        var store = new FileColumnarStateStore(directory, 1);
+        store.save(3, 10, Map.of());
+
+        try (var ignored = store.retain(10)) {
+            store.save(3, 11, Map.of());
+            assertThat(store.retainedEpochs(3)).contains(List.of(10L, 11L));
+        }
+        store.save(3, 12, Map.of());
+
+        assertThat(store.retainedEpochs(3)).contains(List.of(12L));
+    }
+
+    @Test
+    void fileStateStoreRecoversFromKilledSaveAndReclaim(@TempDir java.nio.file.Path directory)
+            throws Exception {
+        var store = new FileColumnarStateStore(directory, 2);
+        store.save(0, 1, Map.of("state", new byte[] {1}));
+
+        var save = child("save", directory);
+        await(directory, path -> path.getFileName().toString().endsWith(".tmp"));
+        save.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
+        store.save(0, 3, Map.of("state", new byte[] {3}));
+        assertThat(store.retainedEpochs(0)).contains(List.of(1L, 3L));
+        assertThat(store.load(0, 1)).usingRecursiveComparison().isEqualTo(Map.of("state", new byte[] {1}));
+        assertThat(java.nio.file.Files.list(directory))
+                .noneMatch(path -> path.getFileName().toString().endsWith(".tmp"));
+
+        var seed = directory.resolve("partition-0-epoch-3.snapshot");
+        for (long epoch = 4; epoch <= 2_000; epoch++) {
+            java.nio.file.Files.copy(seed, directory.resolve("partition-0-epoch-" + epoch + ".snapshot"));
+        }
+        var reclaim = child("reclaim", directory);
+        await(directory, path -> path.getFileName().toString().equals("partition-0-epoch-2001.snapshot"));
+        reclaim.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
+
+        var restarted = new FileColumnarStateStore(directory, 2);
+        restarted.save(0, 2_002, Map.of("state", new byte[] {4}));
+        assertThat(restarted.retainedEpochs(0)).contains(List.of(2_001L, 2_002L));
+        assertThat(java.nio.file.Files.list(directory).mapToLong(path -> path.toFile().length()).sum())
+                .isLessThanOrEqualTo(64);
+    }
+
+    @Test
     void fileStateStoreWritesTheSharedContainerLayout(@TempDir java.nio.file.Path directory)
             throws java.io.IOException {
         var store = new FileColumnarStateStore(directory);
@@ -209,5 +284,33 @@ class ColumnarStatefulFeaturesTest {
 
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static Process child(String operation, java.nio.file.Path directory) throws java.io.IOException {
+        return new ProcessBuilder(
+                        java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                        "-cp",
+                        System.getProperty("java.class.path"),
+                        ColumnarStatefulFeaturesTest.class.getName(),
+                        operation,
+                        directory.toString())
+                .redirectErrorStream(true)
+                .start();
+    }
+
+    private static void await(
+            java.nio.file.Path directory,
+            java.util.function.Predicate<java.nio.file.Path> condition)
+            throws Exception {
+        var deadline = Instant.now().plusSeconds(10);
+        while (Instant.now().isBefore(deadline)) {
+            try (var files = java.nio.file.Files.list(directory)) {
+                if (files.anyMatch(condition)) {
+                    return;
+                }
+            }
+            Thread.sleep(1);
+        }
+        throw new AssertionError("child process did not reach the requested filesystem state");
     }
 }

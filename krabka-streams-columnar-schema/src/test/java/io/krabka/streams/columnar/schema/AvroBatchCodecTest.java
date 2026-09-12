@@ -108,7 +108,7 @@ class AvroBatchCodecTest {
 
             assertThatThrownBy(() -> codec.decode(
                             "orders", List.of(new ConsumedRecord(null, unknown, 1, 0, 0))))
-                    .hasRootCauseInstanceOf(SchemaFetchPendingException.class);
+                    .isInstanceOf(SchemaFetchPendingException.class);
         }
     }
 

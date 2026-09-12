@@ -196,6 +196,8 @@ abstract class AbstractSchemaSerde<T> implements Serde<T> {
             try {
                 var frame = unframe(bytes);
                 return deserializeBody(frame.schemaId(), frame.body());
+            } catch (SchemaFetchPendingException error) {
+                throw error;
             } catch (SerializationException error) {
                 throw error;
             } catch (Exception error) {

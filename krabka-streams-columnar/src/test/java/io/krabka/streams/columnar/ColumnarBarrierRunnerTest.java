@@ -212,6 +212,30 @@ class ColumnarBarrierRunnerTest {
         }
     }
 
+    @Test
+    void reportsAvailableSnapshotsWhenACutWasReclaimed() {
+        try (var allocator = new RootAllocator();
+                var consumer = new MockConsumer<byte[], byte[]>("earliest");
+                var cutConsumer = new MockConsumer<byte[], byte[]>("earliest");
+                var producer = new MockProducer<byte[], byte[]>(
+                        true, null, new ByteArraySerializer(), new ByteArraySerializer())) {
+            publishCut(cutConsumer, 9, Map.of(IN_0, 2L));
+            var stateStore = new RecordingStateStore() {
+                @Override
+                public java.util.Optional<List<Long>> retainedEpochs(int partition) {
+                    return java.util.Optional.of(List.of(7L, 8L));
+                }
+            };
+            var runner = start(allocator, consumer, cutConsumer, producer, stateStore, ignored -> { });
+            assign(consumer, IN_0);
+
+            assertThatThrownBy(() -> runner.restoreToEpoch(9))
+                    .isInstanceOf(ColumnarException.class)
+                    .hasMessage("snapshot epoch 9 is not retained; available epochs by partition: {0=[7, 8]}");
+            runner.close();
+        }
+    }
+
     private static ColumnarRunner.GroupRunner start(
             RootAllocator allocator,
             MockConsumer<byte[], byte[]> consumer,
@@ -344,7 +368,7 @@ class ColumnarBarrierRunnerTest {
         }
     }
 
-    private static final class RecordingStateStore implements ColumnarStateStore {
+    private static class RecordingStateStore implements ColumnarStateStore {
         private final List<Save> loads = new ArrayList<>();
         private final List<Save> saves = new ArrayList<>();
         private final Map<Save, Map<String, byte[]>> stored = new LinkedHashMap<>();
