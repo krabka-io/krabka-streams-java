@@ -5,389 +5,129 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>krabka streams for Java — API documentation</title>
 <meta name="description" content="API documentation for krabka-streams-java: Apache Kafka Streams with krabka schema registry and Apache Arrow columnar processing.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#080d1a">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 90 90' width='64' height='64' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='matrix(1.2410837,0,0,1.2410837,-10.847205,1.7895666)'%3E%3Cellipse style='fill:none;stroke:%23FF4D2E;stroke-width:7.6591;stroke-dasharray:none' cx='45' cy='45' rx='13.749256' ry='8.6910944'/%3E%3Cg%3E%3Ccircle style='fill:none;stroke:%23FF4D2E;stroke-width:5.01105;stroke-dasharray:none' cx='31.509378' cy='21.770279' r='7.1520071'/%3E%3Cpath style='fill:none;stroke:%23FF4D2E;stroke-width:5.01105;stroke-dasharray:none' d='m -37.432668,-19.054935 a 7.1520071,7.1520071 0 0 1 -4.415052,6.607593 7.1520071,7.1520071 0 0 1 -7.794188,-1.550361 7.1520071,7.1520071 0 0 1 -1.55036,-7.794187 7.1520071,7.1520071 0 0 1 6.607593,-4.415053' transform='rotate(-135)'/%3E%3Crect style='fill:%23FF4D2E;stroke:none;stroke-width:5.29167;stroke-dasharray:none' width='4.4989443' height='12.777002' x='14.19296' y='41.136307' transform='rotate(-30)'/%3E%3C/g%3E%3Cg transform='matrix(-1,0,0,1,89.997483,0)'%3E%3Ccircle style='fill:none;stroke:%23FF4D2E;stroke-width:5.01105;stroke-dasharray:none' cx='31.509378' cy='21.770279' r='7.1520071'/%3E%3Cpath style='fill:none;stroke:%23FF4D2E;stroke-width:5.01105;stroke-dasharray:none' d='m -37.432668,-19.054935 a 7.1520071,7.1520071 0 0 1 -4.415052,6.607593 7.1520071,7.1520071 0 0 1 -7.794188,-1.550361 7.1520071,7.1520071 0 0 1 -1.55036,-7.794187 7.1520071,7.1520071 0 0 1 6.607593,-4.415053' transform='rotate(-135)'/%3E%3Crect style='fill:%23FF4D2E;stroke:none;stroke-width:5.29167;stroke-dasharray:none' width='4.4989443' height='12.777002' x='14.19296' y='41.136307' transform='rotate(-30)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
 <style>
-  :root {
-    --paper: #f5f1e8;
-    --paper-raised: #efe9dc;
-    --ink: #211d16;
-    --ink-soft: #5c5546;
-    --rule: #d8d0bf;
-    --rule-strong: #211d16;
-    --accent: #c2401c;
-    --accent-ink: #ffffff;
-    --highlight: rgba(194, 64, 28, 0.06);
-    --mono: "Berkeley Mono", "IBM Plex Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
-    --serif: "Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper: #171410;
-      --paper-raised: #1f1b15;
-      --ink: #eae3d3;
-      --ink-soft: #a1967f;
-      --rule: #332d23;
-      --rule-strong: #eae3d3;
-      --accent: #ff6a3d;
-      --accent-ink: #171410;
-      --highlight: rgba(255, 106, 61, 0.07);
-    }
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  html { scroll-behavior: smooth; }
-
-  body {
-    background: var(--paper);
-    background-image: repeating-linear-gradient(
-      to bottom, transparent 0, transparent 7px, rgba(128, 112, 80, 0.025) 7px, rgba(128, 112, 80, 0.025) 8px);
-    color: var(--ink);
-    font-family: var(--serif);
-    font-size: 17px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }
-
-  a { color: inherit; }
-  a:hover { color: var(--accent); }
-
-  .sheet {
-    display: grid;
-    grid-template-columns: 3.5rem minmax(0, 72rem);
-    justify-content: center;
-    min-height: 100vh;
-  }
-
-  /* ---- offset gutter -------------------------------------------------- */
-  .gutter {
-    border-left: 1px solid var(--rule);
-    border-right: 1px solid var(--rule);
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--ink-soft);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-top: 1.4rem;
-    gap: 1.9rem;
-    user-select: none;
-  }
-  .gutter span { opacity: 0.75; }
-  .gutter .axis {
-    writing-mode: vertical-rl;
-    letter-spacing: 0.28em;
-    text-transform: uppercase;
-    margin-top: 1rem;
-  }
-
-  main { border-right: 1px solid var(--rule); }
-
-  .row {
-    border-bottom: 1px solid var(--rule);
-    padding: 2.6rem 3.2rem;
-    animation: settle 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
-  .row:nth-child(1) { animation-delay: 0.05s; }
-  .row:nth-child(2) { animation-delay: 0.14s; }
-  .row:nth-child(3) { animation-delay: 0.23s; }
-  .row:nth-child(4) { animation-delay: 0.32s; }
-  .row:nth-child(5) { animation-delay: 0.41s; }
-  .row:nth-child(6) { animation-delay: 0.50s; }
-  .row:nth-child(7) { animation-delay: 0.59s; }
-  @keyframes settle {
-    from { opacity: 0; transform: translateY(9px); }
-    to { opacity: 1; transform: none; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .row { animation: none; }
-  }
-
-  .kicker {
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.32em;
-    text-transform: uppercase;
-    color: var(--ink-soft);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.1rem;
-  }
-  .kicker::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
-
-  /* ---- masthead ------------------------------------------------------- */
-  .masthead { position: relative; padding-top: 3.4rem; padding-bottom: 3rem; }
-  .masthead h1 {
-    font-family: var(--mono);
-    font-weight: 500;
-    font-size: clamp(2.1rem, 5.4vw, 3.6rem);
-    letter-spacing: -0.03em;
-    line-height: 1.08;
-    text-wrap: balance;
-  }
-  .masthead h1 em {
-    font-style: normal;
-    color: var(--accent);
-  }
-  .masthead .tagline {
-    max-width: 44rem;
-    margin-top: 1.4rem;
-    font-size: 1.12rem;
-    color: var(--ink-soft);
-  }
-  .stamp {
-    position: absolute;
-    top: 2.2rem;
-    right: 3.2rem;
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    letter-spacing: 0.14em;
-    color: var(--accent);
-    border: 1.5px solid var(--accent);
-    border-radius: 2px;
-    padding: 0.35rem 0.7rem;
-    transform: rotate(4deg);
-    opacity: 0.85;
-  }
-  .actions { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 2.1rem; }
-  .button {
-    font-family: var(--mono);
-    font-size: 0.86rem;
-    letter-spacing: 0.05em;
-    text-decoration: none;
-    border: 1.5px solid var(--rule-strong);
-    padding: 0.72rem 1.35rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, color 0.15s ease;
-  }
-  .button.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accent-ink);
-  }
-  .button:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 3px 3px 0 var(--rule-strong);
-    color: inherit;
-  }
-  .button.primary:hover { color: var(--accent-ink); box-shadow: 3px 3px 0 var(--rule-strong); }
-  .button .arrow { transition: transform 0.15s ease; }
-  .button:hover .arrow { transform: translateX(3px); }
-
-  /* ---- decorative batch strip ---------------------------------------- */
-  .batch { padding: 0; overflow-x: auto; background: var(--paper-raised); }
-  .batch table {
-    border-collapse: collapse;
-    width: 100%;
-    font-family: var(--mono);
-    font-size: 0.74rem;
-    white-space: nowrap;
-  }
-  .batch caption {
-    text-align: left;
-    padding: 0.85rem 3.2rem 0.6rem;
-    font-size: 0.68rem;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--ink-soft);
-  }
-  .batch th, .batch td {
-    border-top: 1px solid var(--rule);
-    padding: 0.5rem 1.1rem;
-    text-align: left;
-    font-weight: 400;
-  }
-  .batch th:first-child, .batch td:first-child { padding-left: 3.2rem; }
-  .batch th { color: var(--accent); }
-  .batch td { color: var(--ink-soft); }
-  .batch tr:hover td { background: var(--highlight); color: var(--ink); }
-
-  /* ---- section headings ----------------------------------------------- */
-  h2 {
-    font-family: var(--mono);
-    font-weight: 500;
-    font-size: 1.05rem;
-    letter-spacing: 0.02em;
-    margin-bottom: 1.5rem;
-  }
-  h2 .index { color: var(--accent); margin-right: 0.65rem; }
-
-  /* ---- install --------------------------------------------------------- */
-  .install pre {
-    font-family: var(--mono);
-    font-size: 0.88rem;
-    line-height: 1.75;
-    background: var(--paper-raised);
-    border: 1px solid var(--rule);
-    border-left: 3px solid var(--accent);
-    padding: 1.1rem 1.4rem;
-    overflow-x: auto;
-  }
-  .install .comment { color: var(--ink-soft); }
-  .install .string { color: var(--accent); }
-  .install p { margin-top: 1rem; color: var(--ink-soft); font-size: 0.98rem; }
-
-  /* ---- module table ---------------------------------------------------- */
-  .modules { padding-left: 0; padding-right: 0; }
-  .modules h2 { padding: 0 3.2rem; }
-  .module {
-    display: grid;
-    grid-template-columns: 15.5rem minmax(0, 1fr) auto;
-    gap: 1.6rem;
-    align-items: baseline;
-    padding: 1.35rem 3.2rem;
-    border-top: 1px solid var(--rule);
-    text-decoration: none;
-    position: relative;
-  }
-  .module::before {
-    content: "";
-    position: absolute;
-    left: 0; top: -1px; bottom: -1px;
-    width: 3px;
-    background: var(--accent);
-    transform: scaleY(0);
-    transition: transform 0.18s ease;
-  }
-  .module:hover { background: var(--highlight); color: inherit; }
-  .module:hover::before { transform: scaleY(1); }
-  .module .name { font-family: var(--mono); font-size: 0.92rem; }
-  .module .desc { color: var(--ink-soft); font-size: 0.98rem; }
-  .module .pkg {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--ink-soft);
-    letter-spacing: 0.02em;
-  }
-  .module:hover .pkg { color: var(--accent); }
-  .module .pkg::after { content: " →"; }
-
-  /* ---- pipeline -------------------------------------------------------- */
-  .pipeline .flow {
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.85rem;
-    color: var(--ink-soft);
-  }
-  .pipeline .stage {
-    border: 1px solid var(--rule);
-    background: var(--paper-raised);
-    padding: 0.55rem 0.95rem;
-    color: var(--ink);
-  }
-  .pipeline .stage.hot { border-color: var(--accent); color: var(--accent); }
-  .pipeline .connector { color: var(--accent); user-select: none; }
-  .pipeline p { margin-top: 1.3rem; max-width: 46rem; color: var(--ink-soft); font-size: 0.98rem; }
-
-  /* ---- guides ---------------------------------------------------------- */
-  .guides ul {
-    list-style: none;
-    columns: 2;
-    column-gap: 3rem;
-    max-width: 46rem;
-  }
-  .guides li { break-inside: avoid; border-bottom: 1px dashed var(--rule); }
-  .guides a {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.55rem 0.15rem;
-    text-decoration: none;
-    font-size: 0.98rem;
-  }
-  .guides a span { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
-  .guides a:hover span { color: var(--accent); }
-
-  /* ---- footer ---------------------------------------------------------- */
-  footer.row {
-    border-bottom: none;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 1rem;
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--ink-soft);
-    padding-top: 1.6rem;
-    padding-bottom: 1.6rem;
-  }
-  footer.row a { text-decoration: none; }
-
-  @media (max-width: 860px) {
-    .sheet { grid-template-columns: minmax(0, 1fr); }
-    .gutter { display: none; }
-    .row, .modules h2, .batch caption { padding-left: 1.4rem; padding-right: 1.4rem; }
-    .modules .module { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; padding-left: 1.4rem; padding-right: 1.4rem; }
-    .batch th:first-child, .batch td:first-child { padding-left: 1.4rem; }
-    .stamp { position: static; display: inline-block; margin-bottom: 1.2rem; }
-    .guides ul { columns: 1; }
-  }
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
+:root{color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;color:#e5e7eb;font:400 16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background-color:#080d1a;background-image:radial-gradient(ellipse 80% 50% at 50% -20%,rgba(30,58,138,.22),transparent 70%),radial-gradient(ellipse 60% 40% at 100% 30%,rgba(15,23,42,.4),transparent 60%);background-attachment:fixed}
+a{color:#ff8466;text-decoration:none}
+a:hover,a:focus-visible{color:#ffb39e;text-decoration:underline}
+a:focus-visible{outline:2px solid #ff4d2e;outline-offset:2px;border-radius:4px}
+code,pre{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main,.site-footer{width:100%;max-width:60rem;margin:0 auto;padding-left:1rem;padding-right:1rem}
+.site-header{display:flex;align-items:center;gap:1rem;padding-top:3rem;padding-bottom:.5rem}
+.logo{display:block;flex:none;width:3.5rem;height:3.5rem}
+.logo svg{display:block;width:100%;height:100%}
+.kicker{margin:0 0 .25rem;color:#9ca3af;font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+h1{margin:0;color:#f3f4f6;font-size:clamp(1.6rem,5vw,2.5rem);font-weight:700;letter-spacing:-.02em;line-height:1.15;overflow-wrap:anywhere}
+h1 em{font-style:normal;color:#ff4d2e}
+h2{margin:0 0 1rem;color:#f3f4f6;font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
+h2 .index{margin-right:.6rem;color:#ff8466;font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85em;font-weight:500}
+section{margin-top:2.5rem}
+.tagline{margin:1.25rem 0 0;max-width:44rem;color:#9ca3af;font-size:1.05rem}
+.version{display:inline-block;margin-top:1rem;padding:.15rem .65rem;color:#9ca3af;font:500 .8rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;border:1px solid #1e293b;border-radius:999px;background:#0c1322}
+.actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1.75rem}
+.button{display:inline-flex;align-items:center;gap:.5rem;padding:.6rem 1.15rem;color:#e5e7eb;font-weight:500;text-decoration:none;border:1px solid #334155;border-radius:.5rem;background:#0c1322}
+.button:hover,.button:focus-visible{color:#f3f4f6;text-decoration:none;border-color:#ff4d2e}
+.button.primary{color:#080d1a;border-color:#ff4d2e;background:#ff4d2e;font-weight:600}
+.button.primary:hover,.button.primary:focus-visible{color:#080d1a;background:#ff8466;border-color:#ff8466}
+.panel{background:rgba(15,23,42,.72);border:1px solid rgba(255,255,255,.08);border-radius:.75rem;overflow:hidden}
+.batch{overflow-x:auto}
+.batch table{width:100%;border-collapse:collapse;font:400 .78rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:nowrap}
+.batch caption{padding:.85rem 1rem;color:#9ca3af;font:600 .78rem Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.06em;text-align:left;text-transform:uppercase;white-space:normal}
+.batch th,.batch td{padding:.55rem 1rem;text-align:left;font-weight:400;border-top:1px solid rgba(255,255,255,.08)}
+.batch th{color:#ffb39e;background:rgba(12,19,34,.9)}
+.batch td{color:#9ca3af}
+.batch tbody tr:hover{background:rgba(255,77,46,.06)}
+.install pre{margin:0;padding:1.1rem 1.25rem;overflow-x:auto;color:#e5e7eb;font-size:.85rem;line-height:1.75;background:#0f172a;border:1px solid #1e293b;border-radius:.5rem}
+.install .comment{color:#9ca3af;font-style:italic}
+.install .string{color:#86efac}
+.install p,.pipeline p{margin:1rem 0 0;color:#9ca3af}
+.modules .module{display:grid;grid-template-columns:15.5rem minmax(0,1fr) auto;gap:1.5rem;align-items:baseline;padding:1rem 1.25rem;color:inherit;text-decoration:none;border-top:1px solid rgba(255,255,255,.08)}
+.modules .module:first-of-type{border-top:0}
+.modules .module:hover,.modules .module:focus-visible{background:rgba(255,77,46,.06);text-decoration:none}
+.module .name{color:#ff8466;font:500 .9rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+.module:hover .name{color:#ffb39e}
+.module .desc{color:#9ca3af}
+.module .pkg{color:#9ca3af;font:400 .75rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+.module .pkg::after{content:" →"}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;color:#9ca3af;font:400 .8rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.stage{padding:.5rem .9rem;color:#e5e7eb;background:#0c1322;border:1px solid #1e293b;border-radius:.5rem}
+.stage.hot{color:#ffb39e;border-color:#ff4d2e}
+.connector{color:#ff4d2e;user-select:none}
+.guides ul{margin:0;padding:0;list-style:none;columns:2;column-gap:2.5rem}
+.guides li{break-inside:avoid;border-bottom:1px solid #1e293b}
+.guides a{display:flex;justify-content:space-between;gap:1rem;padding:.6rem .15rem}
+.guides a span{color:#9ca3af;font:400 .75rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.site-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.75rem 1.5rem;margin-top:3rem;padding-top:1.5rem;padding-bottom:3rem;color:#9ca3af;font-size:.9rem;border-top:1px solid #1e293b}
+@media (max-width:48rem){.modules .module{grid-template-columns:minmax(0,1fr);gap:.25rem}.guides ul{columns:1}.site-header{padding-top:2rem}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.001ms!important;animation-duration:.001ms!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<div class="sheet">
-  <aside class="gutter" aria-hidden="true">
-    <span>0000</span><span>0001</span><span>0002</span><span>0003</span><span>0004</span>
-    <span class="axis">krabka-io / krabka-streams-java</span>
-  </aside>
+<main>
+  <header class="site-header">
+    <span class="logo" role="img" aria-label="krabka logo"><svg viewBox="0 0 90 90" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1.2410837,0,0,1.2410837,-10.847205,1.7895666)"><ellipse style="fill:none;stroke:#FF4D2E;stroke-width:7.6591;stroke-dasharray:none" cx="45" cy="45" rx="13.749256" ry="8.6910944"/><g><circle style="fill:none;stroke:#FF4D2E;stroke-width:5.01105;stroke-dasharray:none" cx="31.509378" cy="21.770279" r="7.1520071"/><path style="fill:none;stroke:#FF4D2E;stroke-width:5.01105;stroke-dasharray:none" d="m -37.432668,-19.054935 a 7.1520071,7.1520071 0 0 1 -4.415052,6.607593 7.1520071,7.1520071 0 0 1 -7.794188,-1.550361 7.1520071,7.1520071 0 0 1 -1.55036,-7.794187 7.1520071,7.1520071 0 0 1 6.607593,-4.415053" transform="rotate(-135)"/><rect style="fill:#FF4D2E;stroke:none;stroke-width:5.29167;stroke-dasharray:none" width="4.4989443" height="12.777002" x="14.19296" y="41.136307" transform="rotate(-30)"/></g><g transform="matrix(-1,0,0,1,89.997483,0)"><circle style="fill:none;stroke:#FF4D2E;stroke-width:5.01105;stroke-dasharray:none" cx="31.509378" cy="21.770279" r="7.1520071"/><path style="fill:none;stroke:#FF4D2E;stroke-width:5.01105;stroke-dasharray:none" d="m -37.432668,-19.054935 a 7.1520071,7.1520071 0 0 1 -4.415052,6.607593 7.1520071,7.1520071 0 0 1 -7.794188,-1.550361 7.1520071,7.1520071 0 0 1 -1.55036,-7.794187 7.1520071,7.1520071 0 0 1 6.607593,-4.415053" transform="rotate(-135)"/><rect style="fill:#FF4D2E;stroke:none;stroke-width:5.29167;stroke-dasharray:none" width="4.4989443" height="12.777002" x="14.19296" y="41.136307" transform="rotate(-30)"/></g></g></svg></span>
+    <div>
+      <p class="kicker">API documentation</p>
+      <h1>krabka <em>streams</em> for Java</h1>
+    </div>
+  </header>
 
-  <main>
-    <header class="row masthead">
-      <p class="kicker">API documentation · record batch № @VERSION@</p>
-      <div class="stamp">v@VERSION@ · JAVA 17+</div>
-      <h1>krabka <em>streams</em><br>for Java</h1>
-      <p class="tagline">
-        The Apache Kafka Streams API with krabka schema registry serdes and Apache Arrow
-        columnar batch processing. Every public type documented, with examples.
-      </p>
-      <div class="actions">
-        <a class="button primary" href="./api/">Browse the API <span class="arrow">→</span></a>
-        <a class="button" href="https://github.com/krabka-io/krabka-streams-java">GitHub <span class="arrow">→</span></a>
-      </div>
-    </header>
+  <section aria-label="Introduction" style="margin-top:0">
+    <p class="tagline">
+      The Apache Kafka Streams API with krabka schema registry serdes and Apache Arrow
+      columnar batch processing. Every public type documented, with examples.
+    </p>
+    <span class="version">v@VERSION@ · Java 17+</span>
+    <div class="actions">
+      <a class="button primary" href="./api/">Browse the API →</a>
+      <a class="button" href="https://github.com/krabka-io/krabka-streams-java">GitHub →</a>
+    </div>
+  </section>
 
-    <section class="row batch" aria-label="Reserved metadata columns">
-      <table>
-        <caption>Every decoded batch carries the record's metadata as columns</caption>
-        <thead>
-          <tr>
-            <th scope="col">payload…</th>
-            <th scope="col">__key</th>
-            <th scope="col">__timestamp</th>
-            <th scope="col">__partition</th>
-            <th scope="col">__offset</th>
-            <th scope="col">__headers</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>amount: 7</td><td>0x616461</td><td>1786312800000</td><td>0</td><td>42</td><td>[trace-id]</td></tr>
-          <tr><td>amount: 12</td><td>0x616461</td><td>1786312800417</td><td>0</td><td>43</td><td>[trace-id]</td></tr>
-          <tr><td>amount: 3</td><td>0x626f62</td><td>1786312801003</td><td>0</td><td>44</td><td>[]</td></tr>
-        </tbody>
-      </table>
-    </section>
+  <section class="panel batch" aria-label="Reserved metadata columns">
+    <table>
+      <caption>Every decoded batch carries the record's metadata as columns</caption>
+      <thead>
+        <tr>
+          <th scope="col">payload…</th>
+          <th scope="col">__key</th>
+          <th scope="col">__timestamp</th>
+          <th scope="col">__partition</th>
+          <th scope="col">__offset</th>
+          <th scope="col">__headers</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>amount: 7</td><td>0x616461</td><td>1786312800000</td><td>0</td><td>42</td><td>[trace-id]</td></tr>
+        <tr><td>amount: 12</td><td>0x616461</td><td>1786312800417</td><td>0</td><td>43</td><td>[trace-id]</td></tr>
+        <tr><td>amount: 3</td><td>0x626f62</td><td>1786312801003</td><td>0</td><td>44</td><td>[]</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-    <section class="row install">
-      <h2><span class="index">00</span>Install</h2>
-      <pre><span class="comment">// build.gradle.kts — each module ships separately; any one pins the Kafka Streams API</span>
+  <section class="install">
+    <h2><span class="index">00</span>Install</h2>
+    <pre><span class="comment">// build.gradle.kts — each module ships separately; any one pins the Kafka Streams API</span>
 implementation(<span class="string">"io.krabka:krabka-streams:@VERSION@"</span>)
 implementation(<span class="string">"io.krabka:krabka-streams-schema-serde:@VERSION@"</span>)
 implementation(<span class="string">"io.krabka:krabka-streams-columnar:@VERSION@"</span>)
 implementation(<span class="string">"io.krabka:krabka-streams-columnar-schema:@VERSION@"</span>)
 testImplementation(<span class="string">"io.krabka:krabka-streams-test-utils:@VERSION@"</span>)</pre>
-      <p>
-        Or import <a href="https://central.sonatype.com/artifact/io.krabka/krabka-streams-bom">io.krabka:krabka-streams-bom</a>
-        for version constraints across every module.
-      </p>
-    </section>
+    <p>
+      Or import <a href="https://central.sonatype.com/artifact/io.krabka/krabka-streams-bom">io.krabka:krabka-streams-bom</a>
+      for version constraints across every module.
+    </p>
+  </section>
 
-    <section class="row modules">
-      <h2><span class="index">01</span>Modules</h2>
+  <section>
+    <h2><span class="index">01</span>Modules</h2>
+    <div class="panel modules">
       <a class="module" href="./api/io/krabka/streams/package-summary.html">
         <span class="name">krabka-streams</span>
         <span class="desc">Apache Kafka Streams API and krabka defaults — the streams group protocol in one call.</span>
@@ -413,54 +153,54 @@ testImplementation(<span class="string">"io.krabka:krabka-streams-test-utils:@VE
         <span class="desc">A broker-free columnar test driver and an in-memory schema registry stub.</span>
         <span class="pkg">io.krabka.streams.test</span>
       </a>
-    </section>
+    </div>
+  </section>
 
-    <section class="row pipeline">
-      <h2><span class="index">02</span>The batch model</h2>
-      <div class="flow" role="img" aria-label="Pipeline: consumer poll, decode to Arrow, operators, encode, producer send">
-        <span class="stage">consumer.poll()</span>
-        <span class="connector">──▶</span>
-        <span class="stage hot">BatchCodec.decode</span>
-        <span class="connector">──▶</span>
-        <span class="stage hot">operators × Arrow</span>
-        <span class="connector">──▶</span>
-        <span class="stage hot">BatchCodec.encode</span>
-        <span class="connector">──▶</span>
-        <span class="stage">producer.send()</span>
-      </div>
-      <p>
-        One fetched topic-partition batch is one processing unit: decoded into a single
-        <a href="./api/io/krabka/streams/columnar/BatchCodec.html">VectorSchemaRoot</a>, transformed as whole
-        batches by <a href="./api/io/krabka/streams/columnar/BuiltinOp.html">built-in</a> or
-        <a href="./api/io/krabka/streams/columnar/ColumnarProcessor.html">custom</a> operators, produced and
-        committed by the <a href="./api/io/krabka/streams/columnar/ColumnarRunner.html">runner</a> only after
-        every acknowledgement arrives.
-      </p>
-    </section>
+  <section class="pipeline">
+    <h2><span class="index">02</span>The batch model</h2>
+    <div class="flow" role="img" aria-label="Pipeline: consumer poll, decode to Arrow, operators, encode, producer send">
+      <span class="stage">consumer.poll()</span>
+      <span class="connector">──▶</span>
+      <span class="stage hot">BatchCodec.decode</span>
+      <span class="connector">──▶</span>
+      <span class="stage hot">operators × Arrow</span>
+      <span class="connector">──▶</span>
+      <span class="stage hot">BatchCodec.encode</span>
+      <span class="connector">──▶</span>
+      <span class="stage">producer.send()</span>
+    </div>
+    <p>
+      One fetched topic-partition batch is one processing unit: decoded into a single
+      <a href="./api/io/krabka/streams/columnar/BatchCodec.html">VectorSchemaRoot</a>, transformed as whole
+      batches by <a href="./api/io/krabka/streams/columnar/BuiltinOp.html">built-in</a> or
+      <a href="./api/io/krabka/streams/columnar/ColumnarProcessor.html">custom</a> operators, produced and
+      committed by the <a href="./api/io/krabka/streams/columnar/ColumnarRunner.html">runner</a> only after
+      every acknowledgement arrives.
+    </p>
+  </section>
 
-    <section class="row guides">
-      <h2><span class="index">03</span>Guides</h2>
-      <ul>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/getting-started.md">Getting started <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/configuration.md">Configuration <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/schema-registry.md">Schema registry <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/serdes.md">Serdes <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/columnar.md">Columnar processing <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/columnar-operators.md">Columnar operators <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/testing.md">Testing <span>docs/</span></a></li>
-        <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/troubleshooting.md">Troubleshooting <span>docs/</span></a></li>
-      </ul>
-    </section>
+  <section class="guides">
+    <h2><span class="index">03</span>Guides</h2>
+    <ul>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/getting-started.md">Getting started <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/configuration.md">Configuration <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/schema-registry.md">Schema registry <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/serdes.md">Serdes <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/columnar.md">Columnar processing <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/columnar-operators.md">Columnar operators <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/testing.md">Testing <span>docs/</span></a></li>
+      <li><a href="https://github.com/krabka-io/krabka-streams-java/blob/main/docs/troubleshooting.md">Troubleshooting <span>docs/</span></a></li>
+    </ul>
+  </section>
+</main>
 
-    <footer class="row">
-      <span>© krabka-io · Apache License 2.0</span>
-      <span>
-        <a href="https://github.com/krabka-io/krabka-streams-java/blob/main/CHANGELOG.md">changelog</a> ·
-        <a href="https://central.sonatype.com/artifact/io.krabka/krabka-streams">maven central</a> ·
-        <a href="./api/">api reference</a>
-      </span>
-    </footer>
-  </main>
-</div>
+<footer class="site-footer">
+  <span>© krabka-io · Apache License 2.0</span>
+  <span>
+    <a href="https://github.com/krabka-io/krabka-streams-java/blob/main/CHANGELOG.md">changelog</a> ·
+    <a href="https://central.sonatype.com/artifact/io.krabka/krabka-streams">maven central</a> ·
+    <a href="./api/">api reference</a>
+  </span>
+</footer>
 </body>
 </html>
