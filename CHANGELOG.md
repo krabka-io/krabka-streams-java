@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1 - 2026-09-29
+
+- Fix the Gradle release build. `ColumnarRunner.restoreTo` holds an epoch lease that it
+  closes but never reads, and javac's `-Xlint:try` warning failed the release compile
+  under `-Werror`. Bazel builds without `-Werror`, so `bazel test` passed while the
+  `javadocJar` step of the release workflow failed. The lease is unchanged, and no API
+  changes. Version 1.4.0 was never published to Maven Central, so 1.4.1 carries the 1.4.0
+  changes as well.
+
 ## 1.4.0 - 2026-08-26
 
 - Add `krabka-streams-coordination`, the Java port of the coordination primitives: leader
