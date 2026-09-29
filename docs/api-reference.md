@@ -1,6 +1,6 @@
 # API reference
 
-Every public type in `1.4.0`, grouped by module. Types not listed here are
+Every public type in `1.4.1`, grouped by module. Types not listed here are
 package-private implementation details and are not part of the compatibility surface.
 
 The full Javadoc is browsable at <https://krabka-io.github.io/krabka-streams-java/>.

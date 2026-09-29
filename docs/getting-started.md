@@ -14,11 +14,11 @@ Java 17 and Java 21.
 
 ## Coordinates
 
-All artifacts share the group `io.krabka` and the version `1.4.0`.
+All artifacts share the group `io.krabka` and the version `1.4.1`.
 
 ```kotlin
 dependencies {
-    implementation(platform("io.krabka:krabka-streams-bom:1.4.0"))
+    implementation(platform("io.krabka:krabka-streams-bom:1.4.1"))
     implementation("io.krabka:krabka-streams")
     implementation("io.krabka:krabka-streams-schema-serde")
     implementation("io.krabka:krabka-streams-columnar")
@@ -33,7 +33,7 @@ Maven:
 <dependency>
   <groupId>io.krabka</groupId>
   <artifactId>krabka-streams</artifactId>
-  <version>1.4.0</version>
+  <version>1.4.1</version>
 </dependency>
 ```
 

@@ -1,6 +1,6 @@
 # krabka streams for Java documentation
 
-This directory documents `krabka-streams-java` version `1.4.0`.
+This directory documents `krabka-streams-java` version `1.4.1`.
 
 ## Guides
 
