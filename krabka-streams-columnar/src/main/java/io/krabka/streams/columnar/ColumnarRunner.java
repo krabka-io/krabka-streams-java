@@ -934,6 +934,7 @@ public final class ColumnarRunner {
             }
         }
 
+        @SuppressWarnings("try")
         private BarrierCut restoreTo(BarrierCut cut) {
             try (var retained = stateStore.retain(cut.epoch())) {
                 var unavailable = logicalPartitions(consumer).stream()
