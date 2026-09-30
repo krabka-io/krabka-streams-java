@@ -830,13 +830,81 @@ footer {
     padding: 10px 16px;
   }
 
+  /* A class name of up to about 29 characters has to fit the line as one
+   * word, so the title grows with the screen from 1.2em at 320px; the section
+   * headings step down so it still reads as the larger one. */
+  h1.title {
+    font-size: clamp(1.2em, 5.6vw, 1.5em);
+  }
+
+  h2 {
+    font-size: 1.15em;
+  }
+
+  /* The inheritance line is a qualified name: fit it by size and indent, and
+   * let the stock scroller take what is still too long, not a break inside a
+   * word. */
+  div.inheritance {
+    font-size: 0.8em;
+    overflow-wrap: normal;
+  }
+
+  /* Fade the scroller's right edge so a cut line reads as continuing. */
+  main > div.inheritance {
+    padding-right: 1.5em;
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5em), transparent);
+  }
+
+  div.inheritance div.inheritance {
+    font-size: 1em;
+    margin-left: 1em;
+  }
+
+  /* Keep a type link and its external-link arrow on one line. */
+  .summary-table a.external-link,
+  .member-signature a.external-link,
+  code a.external-link,
+  a.external-link:has(> code) {
+    white-space: nowrap;
+  }
+
+  .ui-autocomplete .search-result-label,
+  .ui-autocomplete .search-result-desc {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
   .member-signature,
   pre {
     font-size: 0.9em;
   }
 
-  #search-input,
   #page-search-input {
     width: 160px;
+  }
+
+  /* The box is too narrow for its placeholder, so mark the cut, and fade the
+   * breadcrumb, which the stock script scrolls to its end, where it is cut
+   * instead of starting mid-word. */
+  #search-input {
+    text-overflow: ellipsis;
+  }
+
+  .sub-nav ol.sub-nav-list {
+    padding-left: 1.5em;
+    mask-image: linear-gradient(to right, transparent, #000 1.5em);
+  }
+}
+
+/* The class hierarchy nests up to seven lists at 40px each, which is wider
+ * than a 320px screen. */
+@media screen and (max-width: 400px) {
+  section.hierarchy ul {
+    padding-left: 1rem;
+  }
+
+  .type-name-link {
+    overflow-wrap: anywhere;
   }
 }

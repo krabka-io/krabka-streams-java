@@ -36,9 +36,9 @@ section{margin-top:2.5rem}
 .button.primary{color:#080d1a;border-color:#ff4d2e;background:#ff4d2e;font-weight:600}
 .button.primary:hover,.button.primary:focus-visible{color:#080d1a;background:#ff8466;border-color:#ff8466}
 .panel{background:rgba(15,23,42,.72);border:1px solid rgba(255,255,255,.08);border-radius:.75rem;overflow:hidden}
+.batch-title{margin:0;padding:.85rem 1rem;color:#9ca3af;font:600 .78rem Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.06em;text-transform:uppercase}
 .batch{overflow-x:auto}
 .batch table{width:100%;border-collapse:collapse;font:400 .78rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:nowrap}
-.batch caption{padding:.85rem 1rem;color:#9ca3af;font:600 .78rem Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.06em;text-align:left;text-transform:uppercase;white-space:normal}
 .batch th,.batch td{padding:.55rem 1rem;text-align:left;font-weight:400;border-top:1px solid rgba(255,255,255,.08)}
 .batch th{color:#ffb39e;background:rgba(12,19,34,.9)}
 .batch td{color:#9ca3af}
@@ -55,15 +55,16 @@ section{margin-top:2.5rem}
 .module .desc{color:#9ca3af}
 .module .pkg{color:#9ca3af;font:400 .75rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
 .module .pkg::after{content:" →"}
-.flow{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;color:#9ca3af;font:400 .8rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.stage{padding:.5rem .9rem;color:#e5e7eb;background:#0c1322;border:1px solid #1e293b;border-radius:.5rem}
+.flow{display:flex;align-items:center;gap:.5rem;color:#9ca3af;font:400 .8rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.stage{white-space:nowrap;padding:.5rem .7rem;color:#e5e7eb;background:#0c1322;border:1px solid #1e293b;border-radius:.5rem}
 .stage.hot{color:#ffb39e;border-color:#ff4d2e}
 .connector{color:#ff4d2e;user-select:none}
 .guides ul{margin:0;padding:0;list-style:none;columns:2;column-gap:2.5rem}
 .guides li{break-inside:avoid;border-bottom:1px solid #1e293b}
-.guides a{display:flex;justify-content:space-between;gap:1rem;padding:.6rem .15rem}
+.guides a{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;padding:.6rem .15rem}
 .guides a span{color:#9ca3af;font:400 .75rem "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .site-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.75rem 1.5rem;margin-top:3rem;padding-top:1.5rem;padding-bottom:3rem;color:#9ca3af;font-size:.9rem;border-top:1px solid #1e293b}
+@media (max-width:59.5rem){.flow{flex-direction:column;align-items:flex-start}.connector{margin-left:.75rem;transform:rotate(90deg)}}
 @media (max-width:48rem){.modules .module{grid-template-columns:minmax(0,1fr);gap:.25rem}.guides ul{columns:1}.site-header{padding-top:2rem}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.001ms!important;animation-duration:.001ms!important;scroll-behavior:auto!important}}
 </style>
@@ -90,9 +91,11 @@ section{margin-top:2.5rem}
     </div>
   </section>
 
-  <section class="panel batch" aria-label="Reserved metadata columns">
-    <table>
-      <caption>Every decoded batch carries the record's metadata as columns</caption>
+  <section class="panel" aria-label="Reserved metadata columns">
+    <!-- Outside the scrolling wrapper, so a phone shows the whole title. -->
+    <p class="batch-title" id="batch-title">Every decoded batch carries the record's metadata as columns</p>
+    <div class="batch">
+    <table aria-labelledby="batch-title">
       <thead>
         <tr>
           <th scope="col">payload…</th>
@@ -109,6 +112,7 @@ section{margin-top:2.5rem}
         <tr><td>amount: 3</td><td>0x626f62</td><td>1786312801003</td><td>0</td><td>44</td><td>[]</td></tr>
       </tbody>
     </table>
+    </div>
   </section>
 
   <section class="install">

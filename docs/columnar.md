@@ -17,7 +17,7 @@ consumer.poll ──► List<ConsumedRecord> ──► BatchCodec.decode ──�
                                                                        │
                                                               operators (whole batches)
                                                                        │
-                       List<ProducedToTopic) ◄── BatchCodec.encode ◄───┘
+                       List<ProducedToTopic> ◄── BatchCodec.encode ◄───┘
 ```
 
 The processor instance created when a topology is built survives across calls to
