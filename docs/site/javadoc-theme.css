@@ -830,6 +830,36 @@ footer {
     padding: 10px 16px;
   }
 
+  /* A 26-character class name has to fit the line as one word. */
+  h1.title {
+    font-size: 1.3em;
+  }
+
+  /* The inheritance line is a qualified name: fit it by size and indent, and
+   * let the stock scroller take what is still too long, not a break inside a
+   * word. */
+  div.inheritance {
+    font-size: 0.8em;
+    overflow-wrap: normal;
+  }
+
+  div.inheritance div.inheritance {
+    font-size: 1em;
+    margin-left: 1em;
+  }
+
+  /* Keep a type link and its external-link arrow on one line. */
+  .summary-table a.external-link,
+  .member-signature a.external-link,
+  code a.external-link {
+    white-space: nowrap;
+  }
+
+  .ui-autocomplete .search-result-desc {
+    text-overflow: clip;
+    white-space: normal;
+  }
+
   .member-signature,
   pre {
     font-size: 0.9em;
@@ -838,5 +868,17 @@ footer {
   #search-input,
   #page-search-input {
     width: 160px;
+  }
+}
+
+/* The class hierarchy nests up to seven lists at 40px each, which is wider
+ * than a 320px screen. */
+@media screen and (max-width: 400px) {
+  section.hierarchy ul {
+    padding-left: 1rem;
+  }
+
+  .type-name-link {
+    overflow-wrap: anywhere;
   }
 }
