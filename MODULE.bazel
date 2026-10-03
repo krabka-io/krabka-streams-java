@@ -1,6 +1,6 @@
 module(
     name = "krabka_streams_java",
-    version = "1.0.0",
+    version = "1.4.2",
 )
 
 bazel_dep(name = "rules_java", version = "9.3.0")

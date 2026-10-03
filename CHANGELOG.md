@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2 - 2026-10-02
+
+- Improve the published Javadoc theme and its layout on phones. Library APIs are unchanged.
+
 ## 1.4.1 - 2026-09-29
 
 - Fix the Gradle release build. `ColumnarRunner.restoreTo` holds an epoch lease that it
