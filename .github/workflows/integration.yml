@@ -11,13 +11,15 @@ permissions:
 jobs:
   broker-integration:
     name: ${{ matrix.broker }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         broker: [apache-kafka-4.3.1, krabka-0.3.8]
     steps:
+      - name: Keep temporary files off the size-limited /tmp tmpfs
+        run: echo "TMPDIR=${RUNNER_TEMP}" >> "${GITHUB_ENV}"
       - uses: actions/checkout@v6
       - uses: bazel-contrib/setup-bazel@0.19.0
         with:
@@ -89,9 +91,11 @@ jobs:
 
   schema-registry-integration:
     name: krabka schema registry 0.3.8
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
+      - name: Keep temporary files off the size-limited /tmp tmpfs
+        run: echo "TMPDIR=${RUNNER_TEMP}" >> "${GITHUB_ENV}"
       - uses: actions/checkout@v6
       - uses: bazel-contrib/setup-bazel@0.19.0
         with:
