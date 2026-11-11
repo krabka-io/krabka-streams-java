@@ -32,5 +32,5 @@ the broker fences a deposed leader and the lease decides only when a standby cha
 `__coordination_state` record layouts and the role-to-partition rule are frozen, and the tests
 assert the same golden vectors as `krabka-client-rs` and `krabka-streams-go`.
 `CoordinationCompatibilityIT` also proves live takeover, stale-writer fencing, and recovered-tail
-ordering against both broker images in `.github/workflows/integration.yml`.
+ordering against both broker images in `.github/workflows/ci.yml`.
 See [Coordination](docs/coordination.md).
