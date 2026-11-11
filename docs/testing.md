@@ -212,7 +212,7 @@ cache resolved, and that the registry stored the Avro canonical parsing form.
 
 The CI workflow starts Apache Kafka 4.3.1, krabka 0.3.8, and the krabka schema registry
 0.3.8 in containers with the exact flags these tests need. Copy the commands from
-[`.github/workflows/integration.yml`](../.github/workflows/integration.yml) rather than
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) rather than
 reinventing them; the feature finalization and listener settings are easy to get subtly
 wrong.
 

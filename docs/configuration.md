@@ -102,7 +102,7 @@ krabka format --log-dir /tmp/krabka-data --standalone --node-id 1 \
 ```
 
 The exact container invocations that CI uses are in
-[`.github/workflows/integration.yml`](../.github/workflows/integration.yml).
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 ## JVM flags
 
