@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.3 - 2026-11-11
+
+- Use the shared CI gate and validate merge queue groups.
+
 ## 1.4.2 - 2026-10-02
 
 - Improve the published Javadoc theme and its layout on phones. Library APIs are unchanged.
