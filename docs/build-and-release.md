@@ -36,7 +36,7 @@ build --remote_header=x-buildbuddy-api-key=YOUR_API_KEY
 ```
 
 GitHub Actions reads the same credential from the `BUILDBUDDY_API_KEY` repository secret.
-The integration workflow stays local because its tests connect to services on the runner.
+The integration jobs stay local because their tests connect to services on the runner.
 
 The integration suite is a separate task and needs live services:
 
@@ -167,18 +167,16 @@ different day than the bump:
 
 ## Continuous integration
 
-Four workflows live in `.github/workflows`.
+Three workflows live in `.github/workflows`.
 
 ### `ci.yml`
 
-Runs on every pull request and on pushes to `main`. The `build` job runs
+Runs on every pull request, merge queue group, and push to `main`. The `build` job runs
 `bazel test //...` with Java 17 and 21, compiling every module and running the Java,
 formatting, and lint tests. Bazel supplies Java, Node, and the npm tools; the workflow
 does not install those toolchains separately.
 
-### `integration.yml`
-
-Runs on the same triggers, with two jobs.
+The same workflow runs two integration jobs.
 
 **`broker-integration`** runs a matrix over `apache-kafka-4.3.1` and `krabka-0.3.8`. Each
 job starts the broker in a container, waits for the startup line in its logs, finalizes
@@ -191,6 +189,9 @@ minutes.
 registry 0.3.8 on a shared Docker network, waits for `GET /subjects` to succeed, and runs
 the same Bazel target with `KRABKA_INTEGRATION_SCHEMA_REGISTRY=http://localhost:8081`.
 Timeout: 15 minutes.
+
+The `gate` job uses `krabka-io/tooling` and waits for the build matrix and both
+integration jobs. Branch rules need only the `gate` check.
 
 These two jobs are the reference for running the services locally. The listener,
 feature, and replication-factor flags are easy to get subtly wrong.
@@ -276,7 +277,7 @@ Central Portal user tokens, not your Sonatype account password.
 2. Replace the placeholder line in the new `CHANGELOG.md` section with the real
    changes, and read the rest of the diff.
 3. Review [PARITY.md](../PARITY.md).
-4. Merge to `main` and confirm `ci.yml` and `integration.yml` are green.
+4. Merge to `main` and confirm the `ci.yml` gate is green.
 5. Tag `vX.Y.Z` and push the tag. `release.yml` does the rest.
 
 To dry-run the publication without uploading anything:
